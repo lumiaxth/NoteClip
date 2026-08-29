@@ -1,0 +1,28 @@
+{
+  "name": "noteclip",
+  "description": "摘记本 NoteClip - a lightweight browser note-clipping extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build -b chrome",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip -b chrome && wxt zip -b firefox",
+    "test": "vitest run",
+    "compile": "tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "dexie": "^4.0.10"
+  },
+  "devDependencies": {
+    "@wxt-dev/auto-icons": "^1.1.2",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11",
+    "wxt": "^0.21.0"
+  }
+}
+
