@@ -27,6 +27,10 @@ export default defineContentScript({
 
     let visible = false;
     let lastText = '';
+    /** Enabled by the "floating clip button" setting; live-updated. */
+    let enabled = true;
+    /** True while the user is pressing the button — page/selection events are ignored. */
+    let pressing = false;
 
     function hide(): void {
       if (visible) {
@@ -36,6 +40,7 @@ export default defineContentScript({
     }
 
     function show(): void {
+      if (!enabled) return;
       btn.style.display = 'block';
       visible = true;
     }
@@ -49,11 +54,11 @@ export default defineContentScript({
     function getSelectionText(): string {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed) return '';
-      const text = sel.toString().trim();
-      if (!text) return '';
+      const raw = sel.toString();
+      if (!raw.trim()) return '';
       if (isEditable(document.activeElement)) return '';
       if (isEditable(sel.anchorNode?.parentElement ?? null)) return '';
-      return text;
+      return raw;
     }
 
     function positionButton(): void {
@@ -73,7 +78,8 @@ export default defineContentScript({
       btn.style.top = `${y}px`;
     }
 
-    document.addEventListener('mouseup', () => {
+    document.addEventListener('mouseup', (e) => {
+      if (pressing || btn.contains(e.target as Node)) return;
       const text = getSelectionText();
       if (!text) {
         hide();
@@ -85,6 +91,7 @@ export default defineContentScript({
     });
 
     document.addEventListener('selectionchange', () => {
+      if (pressing) return;
       if (visible && !getSelectionText()) hide();
     });
 
@@ -94,10 +101,40 @@ export default defineContentScript({
       if (!btn.contains(e.target as Node)) hide();
     });
 
-    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    // Isolate the button from page handlers and keep the selection intact
+    // while pressing, so the click event always lands on the button.
+    btn.addEventListener('pointerdown', (e) => {
+      pressing = true;
+      e.stopPropagation();
+    });
+    btn.addEventListener('pointerup', (e) => e.stopPropagation());
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    btn.addEventListener('mouseup', (e) => e.stopPropagation());
+    btn.addEventListener('dragstart', (e) => e.preventDefault());
+    // If the press is aborted (released outside the button), no click event
+    // will ever fire — release the flag so page events work again.
+    window.addEventListener(
+      'pointerup',
+      (e) => {
+        if (!btn.contains(e.target as Node)) pressing = false;
+      },
+      true,
+    );
+
+    function flash(label: string, failed: boolean, ms: number): void {
+      btn.textContent = label;
+      setTimeout(() => {
+        btn.textContent = t('floatingCapture');
+        if (!failed) hide();
+      }, ms);
+    }
 
     btn.addEventListener('click', async () => {
-      const text = lastText || getSelectionText();
+      pressing = false;
+      const text = lastText;
       if (!text) return;
       let resp: BgResponse | undefined;
       try {
@@ -108,17 +145,31 @@ export default defineContentScript({
           title: document.title,
         });
       } catch {
-        resp = undefined;
+        resp = { ok: false };
       }
-      if (resp?.ok) {
-        btn.textContent = t('floatingSaved');
-        setTimeout(() => {
-          btn.textContent = t('floatingCapture');
-          hide();
-        }, 1200);
+      // The background saves fire-and-forget; a missing response still means saved.
+      if (resp?.ok !== false) {
+        flash(t('floatingSaved'), false, 1200);
+        lastText = '';
       } else {
-        hide();
+        flash(t('floatingSaveFailed'), true, 1500);
       }
+    });
+
+    // Settings: accent color + on/off toggle, applied live.
+    function applySettings(s: { accent?: string; floatingButton?: boolean } | undefined): void {
+      if (s?.accent) btn.style.background = s.accent;
+      enabled = s?.floatingButton !== false;
+      if (!enabled) hide();
+    }
+    void browser.storage.local.get('noteclip:settings').then((res) => {
+      applySettings(res['noteclip:settings'] as { accent?: string; floatingButton?: boolean } | undefined);
+    });
+    browser.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      const change = changes['noteclip:settings'];
+      if (!change) return;
+      applySettings(change.newValue as { accent?: string; floatingButton?: boolean } | undefined);
     });
 
     document.documentElement.appendChild(btn);

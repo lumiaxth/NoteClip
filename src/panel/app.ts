@@ -25,6 +25,51 @@ const state: ViewState = { query: '', starredOnly: false, tagId: '' };
 const objUrls = new Map<string, string>();
 let toastTimer: number | undefined;
 let tagMap = new Map<string, Tag>();
+/** Known snippet ids for add-detection toasts; null until the first load. */
+let knownIds: Set<string> | null = null;
+/** Card currently showing the inline delete confirmation. */
+let armedCard: HTMLElement | null = null;
+
+/** Short human-readable label: first few characters of the content. */
+function snippetLabel(s: Snippet): string {
+  const raw = s.kind === 'image' ? s.title || t('imageKind') : s.text ?? '';
+  const oneLine = raw.replace(/\s+/g, ' ').trim();
+  if (!oneLine) return t('imageKind');
+  return oneLine.length > 10 ? oneLine.slice(0, 10) + '…' : oneLine;
+}
+
+/** Replace a card's delete button with inline confirm/cancel buttons. */
+function armCardDelete(card: HTMLElement, id: string): void {
+  const del = card.querySelector<HTMLButtonElement>('[data-action="delete"]');
+  if (!del || card.querySelector('.nc-confirm-del')) return;
+  const wrap = document.createElement('span');
+  wrap.className = 'nc-confirm-del';
+  const ok = document.createElement('button');
+  ok.className = 'nc-action nc-action-danger';
+  ok.dataset.action = 'delete-confirm';
+  ok.dataset.id = id;
+  ok.textContent = t('confirmDelete');
+  const no = document.createElement('button');
+  no.className = 'nc-action';
+  no.dataset.action = 'delete-cancel';
+  no.dataset.id = id;
+  no.textContent = t('cancel');
+  wrap.append(ok, no);
+  del.replaceWith(wrap);
+}
+
+/** Restore the original delete button after a cancelled confirmation. */
+function disarmCardDelete(card: HTMLElement): void {
+  const wrap = card.querySelector('.nc-confirm-del');
+  if (!wrap) return;
+  const btn = document.createElement('button');
+  btn.className = 'nc-action nc-action-delete';
+  btn.dataset.action = 'delete';
+  btn.dataset.id = card.dataset.id ?? '';
+  btn.title = t('delete');
+  btn.textContent = t('delete');
+  wrap.replaceWith(btn);
+}
 
 function objUrl(id: string, blob: Blob | undefined): string | undefined {
   if (!blob) return undefined;
@@ -69,7 +114,8 @@ function cardHtml(s: Snippet): string {
       ? `<div class="nc-img">${url ? `<img src="${url}" loading="lazy" alt="${t('imageKind')}" />` : ''}</div>${
           s.text ? `<div class="nc-text nc-text-clip">${esc(s.text)}</div>` : ''
         }`
-      : `<div class="nc-text" title="${esc(s.text ?? '')}">${esc(s.text ?? '')}</div>`;
+      : `<div class="nc-text nc-text-clamped" title="${esc(s.text ?? '')}">${esc(s.text ?? '')}</div>
+        <button class="nc-expand-btn" data-action="expand" data-id="${s.id}" hidden>${t('expandMore')}</button>`;
 
   const tags = s.tags
     .map((tid) => {
@@ -122,6 +168,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
         <button id="nc-filter-star" class="nc-chip">★ ${t('filterStarred')}</button>
         <span class="nc-spacer"></span>
         <button id="nc-capture" class="nc-chip nc-primary">${t('screenshotBtn')}</button>
+        <button id="nc-settings" class="nc-chip" title="${t('settingsBtn')}">⚙</button>
       </div>
       <div class="nc-toolbar nc-toolbar-2">
         <div class="nc-tagbar" id="nc-tagbar"></div>
@@ -150,6 +197,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   const search = root.querySelector('#nc-search') as HTMLInputElement;
   const filterStar = root.querySelector('#nc-filter-star') as HTMLButtonElement;
   const capture = root.querySelector('#nc-capture') as HTMLButtonElement;
+  const settingsBtn = root.querySelector('#nc-settings') as HTMLButtonElement;
   const exportBtn = root.querySelector('#nc-export') as HTMLButtonElement;
   const importBtn = root.querySelector('#nc-import') as HTMLButtonElement;
   const importFile = root.querySelector('#nc-import-file') as HTMLInputElement;
@@ -178,13 +226,35 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   }
 
   async function refresh(): Promise<void> {
+    const all = await db.snippets.toArray();
+    if (knownIds === null) {
+      knownIds = new Set(all.map((s) => s.id));
+    } else {
+      const fresh = all.filter((s) => !knownIds!.has(s.id));
+      // Exactly one new snippet (e.g. saved from a page) → user feedback.
+      // Bulk additions (import) stay silent: they already show their own toast.
+      if (fresh.length === 1) {
+        toast(t('addedToast').replace('{n}', snippetLabel(fresh[0]!)));
+      }
+      for (const s of all) knownIds!.add(s.id);
+    }
+
     const items = await listSnippets(state);
     list.innerHTML = items.map(cardHtml).join('');
+    armedCard = null;
     const hasFilter = !!(state.query.trim() || state.starredOnly || state.tagId);
     empty.textContent = items.length ? '' : hasFilter ? t('emptyFiltered') : t('emptyAll');
     empty.hidden = items.length > 0;
     if (!items.length) list.innerHTML = '';
     filterStar.classList.toggle('active', state.starredOnly);
+
+    // Show expand buttons only for clamped texts that actually overflow.
+    requestAnimationFrame(() => {
+      list.querySelectorAll<HTMLElement>('.nc-text.nc-text-clamped').forEach((text) => {
+        const btn = text.nextElementSibling as HTMLButtonElement | null;
+        if (btn?.dataset.action === 'expand') btn.hidden = text.scrollHeight <= text.clientHeight + 4;
+      });
+    });
   }
 
   search.addEventListener('input', () => {
@@ -200,6 +270,10 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   capture.addEventListener('click', async () => {
     const resp = await browser.runtime.sendMessage({ type: 'startCapture' });
     if (!resp?.ok) toast(t('captureFailed'));
+  });
+
+  settingsBtn.addEventListener('click', () => {
+    browser.runtime.openOptionsPage();
   });
 
   exportBtn.addEventListener('click', () => {
@@ -244,7 +318,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   });
 
   // List event delegation
-  list.addEventListener('click', (e) => {
+  list.addEventListener('click', async (e) => {
     const target = e.target as HTMLElement;
     const el = target.closest<HTMLElement>('[data-action]');
     if (!el) return;
@@ -255,17 +329,20 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
       void toggleStar(id).then(refresh);
     } else if (action === 'delete' && id) {
       const card = el.closest('.nc-card') as HTMLElement;
-      if (!card.classList.contains('armed')) {
-        card.classList.add('armed');
-        el.textContent = t('deleteArmed');
-        window.setTimeout(() => {
-          card.classList.remove('armed');
-          el.textContent = t('delete');
-        }, 2500);
-        return;
-      }
+      if (armedCard && armedCard !== card) disarmCardDelete(armedCard);
+      armedCard = card;
+      armCardDelete(card, id);
+    } else if (action === 'delete-confirm' && id) {
+      const snip = await db.snippets.get(id);
+      const label = snip ? snippetLabel(snip) : '';
       revokeUrl(id);
-      void deleteSnippet(id).then(refresh);
+      await deleteSnippet(id);
+      toast(t('deletedToast').replace('{n}', label));
+      await refresh();
+    } else if (action === 'delete-cancel' && id) {
+      const card = el.closest('.nc-card') as HTMLElement;
+      disarmCardDelete(card);
+      armedCard = null;
     } else if (action === 'tag-remove' && id && el.dataset.tag) {
       void setSnippetTags(id, currentTags(id).filter((x) => x !== el.dataset.tag)).then(refresh);
     } else if (action === 'tag-add' && id) {
@@ -276,6 +353,12 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
         input.hidden = false;
         input.focus();
       }
+    } else if (action === 'expand' && id) {
+      const card = list.querySelector<HTMLElement>(`.nc-card[data-id="${id}"]`);
+      const text = card?.querySelector<HTMLElement>('.nc-text.nc-text-clamped');
+      if (!text) return;
+      const open = text.classList.toggle('nc-text-open');
+      el.textContent = open ? t('collapse') : t('expandMore');
     }
   });
 
@@ -298,7 +381,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   list.addEventListener('focusout', (e) => {
     const target = e.target as HTMLTextAreaElement;
     if (target.dataset.action === 'comment' && target.dataset.id) {
-      void setComment(target.dataset.id, target.value.trim());
+      void setComment(target.dataset.id, target.value);
     }
   });
 

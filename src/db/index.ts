@@ -100,6 +100,16 @@ export async function deleteTag(id: string): Promise<void> {
   await bumpVersion();
 }
 
+export async function renameTag(id: string, name: string): Promise<Tag | null> {
+  const n = name.trim();
+  if (!n) return null;
+  const existing = await db.tags.where('name').equals(n).first();
+  if (existing && existing.id !== id) return null;
+  await db.tags.update(id, { name: n });
+  await bumpVersion();
+  return (await db.tags.get(id)) ?? null;
+}
+
 export interface ListFilter {
   query?: string;
   starredOnly?: boolean;

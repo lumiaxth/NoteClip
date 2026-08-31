@@ -1,4 +1,5 @@
-:root {
+﻿:root {
+  color-scheme: light;
   --bg: #ffffff;
   --bg-soft: #f4f4f8;
   --border: #e2e2ea;
@@ -6,13 +7,68 @@
   --muted: #8a8f9c;
   --primary: #4f46e5;
   --primary-soft: #eef2ff;
+  --primary-softer: #f5f6ff;
   --danger: #dc2626;
   --star: #f59e0b;
   --radius: 10px;
+  --card: #ffffff;
+  --input: #ffffff;
+  --shadow: 0 12px 40px rgba(15, 18, 30, 0.18);
+  --toast-bg: rgba(31, 35, 48, 0.92);
+  --toast-text: #ffffff;
+  --backdrop: rgba(15, 18, 30, 0.45);
+}
+
+/* Edge-style dark palette */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #1f1f1f;
+  --bg-soft: #2b2b2b;
+  --border: #3f3f3f;
+  --text: #ffffff;
+  --muted: #a6a6a6;
+  --primary: #4cc2ff;
+  --primary-soft: rgba(76, 194, 255, 0.14);
+  --primary-softer: rgba(76, 194, 255, 0.07);
+  --danger: #ff99a4;
+  --star: #fbbf24;
+  --card: #2b2b2b;
+  --input: #333333;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --toast-bg: #3b3b3b;
+  --toast-text: #ffffff;
+  --backdrop: rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #1f1f1f;
+    --bg-soft: #2b2b2b;
+    --border: #3f3f3f;
+    --text: #ffffff;
+    --muted: #a6a6a6;
+    --primary: #4cc2ff;
+    --primary-soft: rgba(76, 194, 255, 0.14);
+    --primary-softer: rgba(76, 194, 255, 0.07);
+    --danger: #ff99a4;
+    --star: #fbbf24;
+    --card: #2b2b2b;
+    --input: #333333;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    --toast-bg: #3b3b3b;
+    --toast-text: #ffffff;
+    --backdrop: rgba(0, 0, 0, 0.5);
+  }
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Keep the [hidden] attribute working even when a class sets display. */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -55,7 +111,7 @@ body.nc-popup {
   border-radius: 8px;
   font-size: 13px;
   outline: none;
-  background: var(--bg);
+  background: var(--input);
   color: var(--text);
 }
 
@@ -84,7 +140,7 @@ body.nc-popup {
   padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--input);
   color: var(--text);
   font-size: 12px;
   cursor: pointer;
@@ -175,7 +231,7 @@ body.nc-popup {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
-  background: var(--bg);
+  background: var(--card);
 }
 
 .nc-card.armed {
@@ -220,6 +276,32 @@ body.nc-popup {
   word-break: break-word;
   margin: 4px 0 6px;
   font-size: 13.5px;
+}
+
+.nc-text-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+  overflow: hidden;
+}
+
+.nc-text-clamped.nc-text-open {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.nc-expand-btn {
+  display: inline-block;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.nc-expand-btn:hover {
+  text-decoration: underline;
 }
 
 .nc-text-clip {
@@ -269,12 +351,12 @@ body.nc-popup {
   min-height: 30px;
   outline: none;
   color: var(--text);
-  background: var(--bg-soft);
+  background: var(--input);
 }
 
 .nc-comment:focus {
   border-color: var(--primary);
-  background: var(--bg);
+  background: var(--input);
 }
 
 .nc-tags {
@@ -343,6 +425,17 @@ body.nc-popup {
   color: var(--danger);
 }
 
+.nc-confirm-del {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nc-action-danger {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .nc-empty {
   color: var(--muted);
   text-align: center;
@@ -355,13 +448,15 @@ body.nc-popup {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 18px 20px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow);
   width: 320px;
   max-width: 90vw;
+  background: var(--card);
+  color: var(--text);
 }
 
 .nc-dialog::backdrop {
-  background: rgba(15, 18, 30, 0.45);
+  background: var(--backdrop);
 }
 
 .nc-dialog-title {
@@ -379,7 +474,7 @@ body.nc-popup {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg);
+  background: var(--input);
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
@@ -400,8 +495,8 @@ body.nc-popup {
   left: 50%;
   bottom: 16px;
   transform: translateX(-50%) translateY(10px);
-  background: rgba(31, 35, 48, 0.92);
-  color: #fff;
+  background: var(--toast-bg);
+  color: var(--toast-text);
   font-size: 12.5px;
   padding: 8px 14px;
   border-radius: 8px;
@@ -416,3 +511,4 @@ body.nc-popup {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+

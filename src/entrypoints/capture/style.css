@@ -2,12 +2,30 @@
   box-sizing: border-box;
 }
 
+/* Author display rules (e.g. .overlay { display:flex }) would otherwise
+   override the UA stylesheet's [hidden] { display:none } and keep the
+   full-screen mask visible forever. */
+[hidden] {
+  display: none !important;
+}
+
+:root {
+  color-scheme: dark;
+  --cap-bg: #1f1f1f;
+  --cap-surface: #2b2b2b;
+  --cap-input: #333333;
+  --cap-border: #3f3f3f;
+  --cap-text: #ffffff;
+  --cap-muted: #a6a6a6;
+  --primary: #4f46e5; /* overridden at runtime by the user's accent color */
+}
+
 html,
 body {
   margin: 0;
   height: 100%;
-  background: #16181f;
-  color: #e6e8ee;
+  background: var(--cap-bg);
+  color: var(--cap-text);
   font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   overflow: hidden;
 }
@@ -25,12 +43,12 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: #1e222c;
-  border-bottom: 1px solid #2c3140;
+  background: var(--cap-surface);
+  border-bottom: 1px solid var(--cap-border);
 }
 
 .hint {
-  color: #9aa3b5;
+  color: var(--cap-muted);
   font-size: 13px;
 }
 
@@ -41,10 +59,10 @@ body {
 
 .btn {
   padding: 7px 18px;
-  border: 1px solid #3a4154;
+  border: 1px solid var(--cap-border);
   border-radius: 8px;
-  background: #262b38;
-  color: #e6e8ee;
+  background: var(--cap-input);
+  color: var(--cap-text);
   font-size: 13px;
   cursor: pointer;
 }
@@ -54,8 +72,8 @@ body {
 }
 
 .btn.primary {
-  background: #4f46e5;
-  border-color: #4f46e5;
+  background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
 }
 
@@ -65,23 +83,25 @@ body {
 }
 
 .stage-wrap {
+  position: relative;
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .stage {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  display: flex;
 }
 
 .img-holder {
   position: relative;
+  margin: auto;
   cursor: crosshair;
   user-select: none;
   touch-action: none;
+  flex: none;
 }
 
 .img-holder img {
@@ -89,13 +109,16 @@ body {
   max-width: 100%;
   max-height: 100%;
   border-radius: 4px;
+  /* Never let the browser start a native image drag — it breaks box selection. */
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
 .sel {
   position: absolute;
-  border: 2px solid #4f46e5;
-  background: rgba(79, 70, 229, 0.18);
-  box-shadow: 0 0 0 9999px rgba(10, 12, 18, 0.35);
+  border: 2px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
 }
 
 .overlay {
@@ -104,13 +127,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 12, 18, 0.72);
+  background: rgba(0, 0, 0, 0.6);
   z-index: 10;
 }
 
+.overlay[hidden] {
+  display: none;
+}
+
 .overlay-box {
-  background: #1e222c;
-  border: 1px solid #2c3140;
+  background: var(--cap-surface);
+  border: 1px solid var(--cap-border);
   border-radius: 12px;
   padding: 24px 32px;
   max-width: 80vw;
@@ -120,4 +147,8 @@ body {
 .overlay-msg {
   margin: 0;
   font-size: 14px;
+}
+
+.overlay-btn {
+  margin-top: 14px;
 }

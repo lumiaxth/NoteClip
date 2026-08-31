@@ -7,12 +7,19 @@ export default defineConfig({
   autoIcons: {
     baseIconPath: 'assets/icon.svg',
   },
+  vite: () => ({
+    build: {
+      // Avoid modulepreload links: shared chunks are also used by content
+      // scripts, which makes Chrome warn about cross-world preload mismatches.
+      modulePreload: false,
+    },
+  }),
   suppressWarnings: {
     firefoxDataCollection: true,
   },
   manifest: ({ browser }) => {
     const isFirefox = browser === 'firefox';
-    const permissions = ['storage', 'contextMenus', 'downloads'];
+    const permissions = ['storage', 'contextMenus', 'downloads', 'alarms', 'notifications'];
     if (!isFirefox) permissions.push('sidePanel');
 
     return {
@@ -22,6 +29,12 @@ export default defineConfig({
       permissions,
       host_permissions: ['<all_urls>'],
       action: isFirefox ? undefined : {},
+      commands: {
+        'open-panel': {
+          suggested_key: { default: 'Alt+Shift+N' },
+          description: '__MSG_cmdOpenPanel__',
+        },
+      },
       browser_specific_settings: {
         gecko: { id: 'noteclip@local.dev' },
       },

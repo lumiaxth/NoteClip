@@ -7,6 +7,7 @@ import {
   toggleStar,
   createTag,
   deleteTag,
+  renameTag,
   listSnippets,
   setSnippetTags,
 } from '@/db';
@@ -70,6 +71,20 @@ describe('snippets CRUD', () => {
     const a = await createTag('  Note  ');
     const b = await createTag('Note');
     expect(a?.id).toBe(b?.id);
+  });
+
+  it('renames a tag', async () => {
+    const tag = await createTag('old');
+    await renameTag(tag!.id, 'new name');
+    expect((await db.tags.get(tag!.id))?.name).toBe('new name');
+  });
+
+  it('renameTag refuses a duplicate name', async () => {
+    await createTag('a');
+    const b = await createTag('b');
+    const res = await renameTag(b!.id, 'a');
+    expect(res).toBeNull();
+    expect((await db.tags.get(b!.id))?.name).toBe('b');
   });
 });
 

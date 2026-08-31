@@ -29,6 +29,8 @@ async function handle(msg: BgMessage): Promise<BgResponse> {
     }
     case 'startCapture':
       return startCapture();
+    default:
+      return { ok: false, error: 'unknown' };
   }
 }
 
