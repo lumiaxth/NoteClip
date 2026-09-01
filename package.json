@@ -15,7 +15,8 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
-    "dexie": "^4.0.10"
+    "dexie": "^4.0.10",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@wxt-dev/auto-icons": "^1.1.2",
@@ -25,4 +26,3 @@
     "wxt": "^0.21.0"
   }
 }
-

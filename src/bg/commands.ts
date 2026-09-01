@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { startCapture } from './capture';
 
 type SidePanelLike = {
   open?: (opts: { tabId?: number; windowId?: number }) => Promise<void>;
@@ -10,6 +11,10 @@ function openPanelTab(): void {
 
 export function setupCommands(): void {
   browser.commands.onCommand.addListener((command, tab) => {
+    if (command === 'start-capture') {
+      void startCapture();
+      return;
+    }
     if (command !== 'open-panel') return;
     const sidePanel = (browser as unknown as { sidePanel?: SidePanelLike }).sidePanel;
     // sidePanel.open() must be called synchronously in the gesture handler:

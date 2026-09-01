@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import type { ExportFile, ExportSnippet, Snippet } from '@/types';
 import { db, bumpVersion } from '@/db';
 import { uuid } from '@/utils/id';
+import { buildMarkdownExport, markdownExportZip } from './markdown';
 
 export function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -106,6 +107,19 @@ export async function downloadExport(): Promise<void> {
   const url = await blobToDataUrl(blob);
   const stamp = new Date().toISOString().slice(0, 10);
   await browser.downloads.download({ url, filename: `noteclip-backup-${stamp}.json`, saveAs: true });
+}
+
+/** Build and download a Markdown export zip (notes.md + images/). */
+export async function downloadMarkdownExport(): Promise<void> {
+  const data = await buildMarkdownExport();
+  const blob = markdownExportZip(data);
+  const url = await blobToDataUrl(blob);
+  const stamp = new Date().toISOString().slice(0, 10);
+  await browser.downloads.download({
+    url,
+    filename: `noteclip-export-${stamp}.zip`,
+    saveAs: true,
+  });
 }
 
 export function readExportFile(file: File): Promise<ExportFile> {

@@ -60,6 +60,33 @@
   "save": { "message": "保存" },
   "invalidShortcut": { "message": "快捷键格式无效" },
   "cmdOpenPanel": { "message": "打开摘记本面板" },
+  "cmdStartCapture": { "message": "截图摘抄" },
+  "filterText": { "message": "文字" },
+  "filterImage": { "message": "图片" },
+  "exportTitle": { "message": "选择导出格式" },
+  "exportJson": { "message": "JSON 备份" },
+  "exportMarkdown": { "message": "Markdown ZIP（含图片文件夹）" },
+  "sectionErrors": { "message": "错误报告" },
+  "errorsHint": {
+    "message": "摘记失败的操作会记录在此（仅保存在本地，最多 100 条），便于排查问题。"
+  },
+  "errorsClear": { "message": "清空错误报告" },
+  "errorsEmpty": { "message": "暂无错误记录" },
+  "autoSaveLabel": { "message": "下载图片时自动保存到摘记本" },
+  "autoSaveModeOff": { "message": "关闭" },
+  "autoSaveModeAll": { "message": "所有网站" },
+  "autoSaveModeSites": { "message": "仅下列网站" },
+  "autoSaveSitesPlaceholder": {
+    "message": "每行一个域名，如：\nweibo.com\nxiaohongshu.com"
+  },
+  "autoSaveHint": {
+    "message": "开启后，通过浏览器下载图片时会自动保存一份图片摘抄到摘记本。"
+  },
+  "autoSaveTitle": { "message": "自动保存 · {d}" },
+  "floatingClipImage": { "message": "摘抄此图" },
+  "clippingNow": { "message": "正在保存…" },
+  "viewerEmpty": { "message": "图片不存在或已被删除" },
+  "viewerTitle": { "message": "摘记本 · 查看图片" },
   "sectionReminder": { "message": "备份提醒" },
   "reminderEnabled": { "message": "定期提醒我备份" },
   "reminderInterval": { "message": "提醒频率" },

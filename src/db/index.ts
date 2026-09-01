@@ -1,12 +1,13 @@
 import Dexie, { type Table } from 'dexie';
 import { browser } from 'wxt/browser';
-import type { PendingCapture, Snippet, Tag } from '@/types';
+import type { ErrorLog, PendingCapture, Snippet, Tag } from '@/types';
 import { uuid } from '@/utils/id';
 
 class NoteClipDB extends Dexie {
   snippets!: Table<Snippet, string>;
   tags!: Table<Tag, string>;
   pendingCaptures!: Table<PendingCapture, string>;
+  errorLogs!: Table<ErrorLog, string>;
 
   constructor() {
     super('noteclip');
@@ -14,6 +15,9 @@ class NoteClipDB extends Dexie {
       snippets: 'id, timestamp, starred, kind, *tags, url',
       tags: 'id, name',
       pendingCaptures: 'id, timestamp',
+    });
+    this.version(2).stores({
+      errorLogs: 'id, timestamp',
     });
   }
 }
@@ -114,12 +118,15 @@ export interface ListFilter {
   query?: string;
   starredOnly?: boolean;
   tagId?: string;
+  /** '' = all; 'text' = text-only clips; 'image' = image clips */
+  kind?: '' | 'text' | 'image';
 }
 
 export async function listSnippets(filter: ListFilter = {}): Promise<Snippet[]> {
   let items = await db.snippets.toArray();
   if (filter.starredOnly) items = items.filter((s) => s.starred);
   if (filter.tagId) items = items.filter((s) => s.tags.includes(filter.tagId!));
+  if (filter.kind) items = items.filter((s) => s.kind === filter.kind);
   const q = (filter.query ?? '').trim().toLowerCase();
   if (q) {
     items = items.filter(
@@ -131,4 +138,29 @@ export async function listSnippets(filter: ListFilter = {}): Promise<Snippet[]> 
   }
   items.sort((a, b) => b.timestamp - a.timestamp);
   return items;
+}
+
+const ERROR_LOG_LIMIT = 100;
+
+/** Record a failure for the error report; keeps only the most recent entries. */
+export async function logError(source: string, message: string, url?: string): Promise<void> {
+  try {
+    await db.errorLogs.add({ id: uuid(), timestamp: Date.now(), source, message, url });
+    const count = await db.errorLogs.count();
+    if (count > ERROR_LOG_LIMIT) {
+      const stale = await db.errorLogs.orderBy('timestamp').limit(count - ERROR_LOG_LIMIT).toArray();
+      await db.errorLogs.bulkDelete(stale.map((e) => e.id));
+    }
+  } catch {
+    // Logging must never break the calling feature.
+  }
+}
+
+export async function listErrors(): Promise<ErrorLog[]> {
+  const items = await db.errorLogs.toArray();
+  return items.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+export async function clearErrors(): Promise<void> {
+  await db.errorLogs.clear();
 }

@@ -32,6 +32,15 @@ export interface PendingCapture {
   timestamp: number;
 }
 
+export interface ErrorLog {
+  id: string;
+  timestamp: number;
+  /** Which feature produced the error, e.g. 'save-image', 'capture' */
+  source: string;
+  message: string;
+  url?: string;
+}
+
 export interface ExportSnippet {
   id: string;
   kind: SnippetKind;
@@ -55,7 +64,11 @@ export interface ExportFile {
 
 export type BgMessage =
   | { type: 'saveText'; text: string; url: string; title: string }
-  | { type: 'saveImage'; src: string; pageUrl: string; pageTitle: string }
+  | { type: 'saveImage'; src?: string; dataUrl?: string; pageUrl: string; pageTitle: string }
+  | { type: 'clipFetchImage'; src: string }
   | { type: 'startCapture' };
 
 export type BgResponse = { ok: true; id?: string } | { ok: false; error?: string };
+
+/** Response for the content-script page-context image fetch. */
+export type ClipFetchResponse = { ok: true; dataUrl: string } | { ok: false; error?: string };

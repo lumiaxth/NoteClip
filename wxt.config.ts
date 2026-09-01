@@ -19,7 +19,17 @@ export default defineConfig({
   },
   manifest: ({ browser }) => {
     const isFirefox = browser === 'firefox';
-    const permissions = ['storage', 'contextMenus', 'downloads', 'alarms', 'notifications'];
+    const permissions = [
+      'storage',
+      'contextMenus',
+      'downloads',
+      'alarms',
+      'notifications',
+      // Temporary session rules only: rewrite Referer when fetching
+      // hotlink-protected images (rule applies to one domain, removed right
+      // after the fetch). No static rules, no blocking.
+      'declarativeNetRequest',
+    ];
     if (!isFirefox) permissions.push('sidePanel');
 
     return {
@@ -33,6 +43,10 @@ export default defineConfig({
         'open-panel': {
           suggested_key: { default: 'Alt+Shift+N' },
           description: '__MSG_cmdOpenPanel__',
+        },
+        'start-capture': {
+          suggested_key: { default: 'Alt+Shift+S' },
+          description: '__MSG_cmdStartCapture__',
         },
       },
       browser_specific_settings: {

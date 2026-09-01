@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>摘记本 · 查看图片</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #1b1d21;
+        display: grid;
+        place-items: center;
+      }
+      img {
+        max-width: 96vw;
+        max-height: 96vh;
+        object-fit: contain;
+        border-radius: 4px;
+      }
+      p {
+        color: #9aa0a6;
+        font: 14px/1.6 system-ui, sans-serif;
+      }
+    </style>
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <img id="img" alt="" hidden />
+    <p id="empty" hidden>图片不存在或已被删除</p>
+  </body>
+</html>

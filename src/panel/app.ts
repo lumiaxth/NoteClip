@@ -9,7 +9,7 @@ import {
   deleteTag,
   db,
 } from '@/db';
-import { downloadExport, readExportFile, importData } from '@/db/io';
+import { downloadExport, downloadMarkdownExport, readExportFile, importData } from '@/db/io';
 import type { Snippet, Tag } from '@/types';
 import { t, relTime, fullTime } from '@/utils/i18n';
 import { domainOf, esc } from '@/utils/format';
@@ -18,9 +18,10 @@ interface ViewState {
   query: string;
   starredOnly: boolean;
   tagId: string;
+  kind: '' | 'text' | 'image';
 }
 
-const state: ViewState = { query: '', starredOnly: false, tagId: '' };
+const state: ViewState = { query: '', starredOnly: false, tagId: '', kind: '' };
 
 const objUrls = new Map<string, string>();
 let toastTimer: number | undefined;
@@ -166,6 +167,8 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
       </div>
       <div class="nc-toolbar">
         <button id="nc-filter-star" class="nc-chip">★ ${t('filterStarred')}</button>
+        <button id="nc-filter-text" class="nc-chip">${t('filterText')}</button>
+        <button id="nc-filter-image" class="nc-chip">${t('filterImage')}</button>
         <span class="nc-spacer"></span>
         <button id="nc-capture" class="nc-chip nc-primary">${t('screenshotBtn')}</button>
         <button id="nc-settings" class="nc-chip" title="${t('settingsBtn')}">⚙</button>
@@ -183,6 +186,14 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
       <div class="nc-list" id="nc-list"></div>
       <div class="nc-empty" id="nc-empty" hidden></div>
     </main>
+    <dialog id="nc-export-dialog" class="nc-dialog">
+      <h3 class="nc-dialog-title">${t('exportTitle')}</h3>
+      <div class="nc-dialog-actions">
+        <button data-format="json" class="nc-btn nc-primary">${t('exportJson')}</button>
+        <button data-format="markdown" class="nc-btn">${t('exportMarkdown')}</button>
+        <button data-format="cancel" class="nc-btn">${t('cancel')}</button>
+      </div>
+    </dialog>
     <dialog id="nc-import-dialog" class="nc-dialog">
       <h3 class="nc-dialog-title">${t('importTitle')}</h3>
       <div class="nc-dialog-actions">
@@ -196,6 +207,8 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
 
   const search = root.querySelector('#nc-search') as HTMLInputElement;
   const filterStar = root.querySelector('#nc-filter-star') as HTMLButtonElement;
+  const filterText = root.querySelector('#nc-filter-text') as HTMLButtonElement;
+  const filterImage = root.querySelector('#nc-filter-image') as HTMLButtonElement;
   const capture = root.querySelector('#nc-capture') as HTMLButtonElement;
   const settingsBtn = root.querySelector('#nc-settings') as HTMLButtonElement;
   const exportBtn = root.querySelector('#nc-export') as HTMLButtonElement;
@@ -206,6 +219,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   const tagbar = root.querySelector('#nc-tagbar') as HTMLElement;
   const datalist = root.querySelector('#nc-tag-datalist') as HTMLDataListElement;
   const dialog = root.querySelector('#nc-import-dialog') as HTMLDialogElement;
+  const exportDialog = root.querySelector('#nc-export-dialog') as HTMLDialogElement;
 
   async function refreshTags(): Promise<void> {
     tagMap = new Map((await db.tags.toArray()).map((tag) => [tag.id, tag]));
@@ -242,11 +256,13 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
     const items = await listSnippets(state);
     list.innerHTML = items.map(cardHtml).join('');
     armedCard = null;
-    const hasFilter = !!(state.query.trim() || state.starredOnly || state.tagId);
+    const hasFilter = !!(state.query.trim() || state.starredOnly || state.tagId || state.kind);
     empty.textContent = items.length ? '' : hasFilter ? t('emptyFiltered') : t('emptyAll');
     empty.hidden = items.length > 0;
     if (!items.length) list.innerHTML = '';
     filterStar.classList.toggle('active', state.starredOnly);
+    filterText.classList.toggle('active', state.kind === 'text');
+    filterImage.classList.toggle('active', state.kind === 'image');
 
     // Show expand buttons only for clamped texts that actually overflow.
     requestAnimationFrame(() => {
@@ -267,6 +283,16 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
     void refresh();
   });
 
+  filterText.addEventListener('click', () => {
+    state.kind = state.kind === 'text' ? '' : 'text';
+    void refresh();
+  });
+
+  filterImage.addEventListener('click', () => {
+    state.kind = state.kind === 'image' ? '' : 'image';
+    void refresh();
+  });
+
   capture.addEventListener('click', async () => {
     const resp = await browser.runtime.sendMessage({ type: 'startCapture' });
     if (!resp?.ok) toast(t('captureFailed'));
@@ -276,8 +302,16 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
     browser.runtime.openOptionsPage();
   });
 
-  exportBtn.addEventListener('click', () => {
-    downloadExport().catch(() => toast(t('exportError')));
+  exportBtn.addEventListener('click', () => exportDialog.showModal());
+
+  exportDialog.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-format]');
+    if (!btn) return;
+    const format = btn.dataset.format as 'json' | 'markdown' | 'cancel';
+    exportDialog.close();
+    if (format === 'cancel') return;
+    const download = format === 'json' ? downloadExport : downloadMarkdownExport;
+    download().catch(() => toast(t('exportError')));
   });
 
   importBtn.addEventListener('click', () => importFile.click());
@@ -320,6 +354,19 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   // List event delegation
   list.addEventListener('click', async (e) => {
     const target = e.target as HTMLElement;
+
+    // Clicking an image opens it full-size in a new tab.
+    if (target.tagName === 'IMG' && target.closest('.nc-img')) {
+      const id = target.closest<HTMLElement>('.nc-card')?.dataset.id;
+      if (id) {
+        await browser.tabs.create({
+          url: browser.runtime.getURL('/viewer.html') + `?id=${id}`,
+          active: true,
+        });
+      }
+      return;
+    }
+
     const el = target.closest<HTMLElement>('[data-action]');
     if (!el) return;
     const action = el.dataset.action;

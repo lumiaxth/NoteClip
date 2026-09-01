@@ -10,8 +10,13 @@ import {
   renameTag,
   listSnippets,
   setSnippetTags,
+  logError,
+  listErrors,
+  clearErrors,
 } from '@/db';
 import { exportData, importData, blobToDataUrl, dataUrlToBlob } from '@/db/io';
+import { buildMarkdownExport, markdownExportZip } from '@/db/markdown';
+import { unzipSync, strFromU8 } from 'fflate';
 
 beforeEach(async () => {
   await db.delete();
@@ -161,5 +166,78 @@ describe('import/export', () => {
     expect(imported.id).not.toBe('old-snippet-id');
     const linked = tags.find((t) => t.id === imported.tags[0])!;
     expect(linked.name).toBe('shared');
+  });
+});
+
+describe('kind filter', () => {
+  it('filters text-only and image snippets', async () => {
+    await addSnippet({ kind: 'text', text: 'note', url: 'u', title: 't' });
+    const blob = new Blob([new Uint8Array([1])], { type: 'image/png' });
+    await addSnippet({ kind: 'image', image: blob, url: 'u', title: 'pic' });
+
+    const texts = await listSnippets({ kind: 'text' });
+    expect(texts).toHaveLength(1);
+    expect(texts[0]!.text).toBe('note');
+
+    const images = await listSnippets({ kind: 'image' });
+    expect(images).toHaveLength(1);
+    expect(images[0]!.kind).toBe('image');
+
+    expect(await listSnippets({ kind: '' })).toHaveLength(2);
+  });
+});
+
+describe('error log', () => {
+  it('records and lists errors newest first', async () => {
+    await logError('save-image', 'HTTP 403', 'https://a.com/pic.jpg');
+    await logError('capture', 'not-web');
+    const errors = await listErrors();
+    expect(errors).toHaveLength(2);
+    expect(errors[0]!.source).toBe('capture');
+    expect(errors[1]!.url).toBe('https://a.com/pic.jpg');
+  });
+
+  it('caps the log at 100 entries', async () => {
+    for (let i = 0; i < 105; i++) await logError('test', `e${i}`);
+    const errors = await listErrors();
+    expect(errors).toHaveLength(100);
+    // Newest kept: e104 exists, e0 dropped.
+    expect(errors.some((e) => e.message === 'e104')).toBe(true);
+    expect(errors.some((e) => e.message === 'e0')).toBe(false);
+  });
+
+  it('clears all errors', async () => {
+    await logError('test', 'x');
+    await clearErrors();
+    expect(await listErrors()).toHaveLength(0);
+  });
+});
+
+describe('markdown export', () => {
+  it('builds notes.md with image files and relative links', async () => {
+    const tag = await createTag('news');
+    await addSnippet({ kind: 'text', text: 'line one\nline two', url: 'https://e.com/a', title: 'Essay', tags: [tag!.id] });
+    const blob = new Blob([new Uint8Array([137, 80])], { type: 'image/png' });
+    await addSnippet({ kind: 'image', image: blob, url: 'https://e.com/b', title: 'Photo' });
+    await setComment((await listSnippets({ kind: 'image' }))[0]!.id, 'look');
+
+    const data = await buildMarkdownExport();
+    expect(data.md).toContain('# 摘记本 NoteClip');
+    expect(data.md).toContain('## Essay');
+    expect(data.md).toContain('[来源](https://e.com/a)');
+    expect(data.md).toContain('`#news`');
+    expect(data.md).toContain('line one\nline two');
+    expect(data.md).toMatch(/!\[Photo\]\(images\/[\w-]+\.png\)/);
+    expect(data.md).toContain('> look');
+    expect(Object.keys(data.files)).toHaveLength(1);
+
+    const zip = markdownExportZip(data);
+    const bytes = new Uint8Array(await zip.arrayBuffer());
+    const entries = unzipSync(bytes);
+    expect(Object.keys(entries)).toContain('notes.md');
+    const md = strFromU8(entries['notes.md']!);
+    expect(md).toBe(data.md);
+    const imagePath = Object.keys(entries).find((p) => p.startsWith('images/'))!;
+    expect(entries[imagePath]!.length).toBe(2);
   });
 });

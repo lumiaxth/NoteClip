@@ -60,6 +60,33 @@
   "save": { "message": "Save" },
   "invalidShortcut": { "message": "Invalid shortcut format" },
   "cmdOpenPanel": { "message": "Open NoteClip panel" },
+  "cmdStartCapture": { "message": "Capture screenshot" },
+  "filterText": { "message": "Text" },
+  "filterImage": { "message": "Images" },
+  "exportTitle": { "message": "Choose export format" },
+  "exportJson": { "message": "JSON backup" },
+  "exportMarkdown": { "message": "Markdown ZIP (with images folder)" },
+  "sectionErrors": { "message": "Error report" },
+  "errorsHint": {
+    "message": "Failed clipping operations are recorded here (stored locally only, up to 100 entries) for troubleshooting."
+  },
+  "errorsClear": { "message": "Clear error report" },
+  "errorsEmpty": { "message": "No errors recorded" },
+  "autoSaveLabel": { "message": "Auto-save downloaded images" },
+  "autoSaveModeOff": { "message": "Off" },
+  "autoSaveModeAll": { "message": "All websites" },
+  "autoSaveModeSites": { "message": "Only these sites" },
+  "autoSaveSitesPlaceholder": {
+    "message": "One domain per line, e.g.:\nweibo.com\nxiaohongshu.com"
+  },
+  "autoSaveHint": {
+    "message": "When enabled, images downloaded through the browser are automatically saved as clips."
+  },
+  "autoSaveTitle": { "message": "Auto-saved · {d}" },
+  "floatingClipImage": { "message": "Clip image" },
+  "clippingNow": { "message": "Saving…" },
+  "viewerEmpty": { "message": "Image not found or deleted" },
+  "viewerTitle": { "message": "NoteClip · View image" },
   "sectionReminder": { "message": "Backup reminder" },
   "reminderEnabled": { "message": "Remind me to back up periodically" },
   "reminderInterval": { "message": "Reminder frequency" },

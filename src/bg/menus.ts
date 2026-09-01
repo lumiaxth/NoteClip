@@ -27,6 +27,10 @@ export function setupMenus(): void {
 }
 
 export async function flashBadge(text: string): Promise<void> {
+  if (text === '!') {
+    // Make the failure signal clearly visible on any toolbar.
+    await browser.action.setBadgeBackgroundColor({ color: '#d93025' });
+  }
   await browser.action.setBadgeText({ text });
   setTimeout(() => void browser.action.setBadgeText({ text: '' }), 2000);
 }
@@ -35,9 +39,11 @@ export interface MenuClickInfo {
   menuItemId: string | number;
   selectionText?: string;
   srcUrl?: string;
+  frameId?: number;
 }
 
 export interface TabLike {
+  id?: number;
   url?: string;
   title?: string;
 }
@@ -55,7 +61,10 @@ export function handleMenuClick(info: MenuClickInfo, tab?: TabLike): void {
   } else if (info.menuItemId === MENU_CAPTURE) {
     void startCapture();
   } else if (info.menuItemId === MENU_SAVE_IMAGE && info.srcUrl) {
-    void saveImageFromUrl(info.srcUrl, pageUrl, pageTitle)
+    void saveImageFromUrl(info.srcUrl, pageUrl, pageTitle, {
+      tabId: tab?.id,
+      frameId: info.frameId,
+    })
       .then(() => flashBadge('✓'))
       .catch(() => flashBadge('!'));
   }

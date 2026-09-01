@@ -5,6 +5,8 @@ import { setupMenus, handleMenuClick } from '@/bg/menus';
 import { setupMessageHandler } from '@/bg/messages';
 import { setupCommands } from '@/bg/commands';
 import { setupReminder } from '@/bg/reminder';
+// Temporarily disabled: auto-save downloaded images.
+// import { setupAutoSave } from '@/bg/autoSave';
 import { db } from '@/db';
 
 export default defineBackground(() => {
@@ -12,6 +14,8 @@ export default defineBackground(() => {
   setupMessageHandler();
   setupCommands();
   setupReminder();
+  // Temporarily disabled: auto-save downloaded images.
+  // setupAutoSave();
 
   // Drop stale capture payloads (user closed the crop tab without saving).
   void db.pendingCaptures

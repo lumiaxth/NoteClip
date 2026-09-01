@@ -29,14 +29,14 @@ h1 {
 section {
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 16px 18px 18px;
   margin-bottom: 16px;
   background: var(--card);
 }
 
 h2 {
   font-size: 15px;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
 }
 
 .row {
@@ -45,6 +45,10 @@ h2 {
   gap: 10px;
   margin: 10px 0;
   flex-wrap: wrap;
+}
+
+.row + .row {
+  margin-top: 14px;
 }
 
 .muted {
@@ -137,6 +141,69 @@ input[type='text']:focus {
   min-width: 120px;
 }
 
+.setting-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+textarea.site-list {
+  width: 100%;
+  min-height: 90px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 12.5px/1.6 ui-monospace, Consolas, monospace;
+  background: var(--input);
+  color: var(--text);
+  resize: vertical;
+}
+
+.error-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+
+.error-row:hover {
+  background: var(--primary-softer, var(--bg-soft));
+}
+
+.error-row .error-time {
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 130px;
+}
+
+.error-row .error-source {
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+.error-row .error-message {
+  flex: 1;
+  word-break: break-all;
+}
+
+.error-row .error-url {
+  color: var(--primary);
+  text-decoration: none;
+  word-break: break-all;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error-row .error-url:hover {
+  text-decoration: underline;
+}
+
 .nc-btn {
   padding: 7px 14px;
   border: 1px solid var(--border);
@@ -145,6 +212,8 @@ input[type='text']:focus {
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
+  min-width: 76px;
+  transition: border-color 0.12s, background 0.12s;
 }
 
 .nc-btn:hover {
@@ -175,6 +244,12 @@ input[type='text']:focus {
 
 .nc-dialog::backdrop {
   background: var(--backdrop);
+}
+
+.nc-dialog h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--text);
 }
 
 .nc-dialog-actions {
