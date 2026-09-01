@@ -54,7 +54,7 @@ export async function buildMarkdownExport(): Promise<MarkdownExport> {
   const parts: string[] = [
     '# 摘记本 NoteClip',
     '',
-    `> 导出时间：${fmtTime(Date.now())}，共 ${items.length} 条摘抄`,
+    `> 导出时间：${fmtTime(Date.now())}，共 ${items.length} 条摘记`,
     '',
   ];
 

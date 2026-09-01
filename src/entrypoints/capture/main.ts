@@ -218,9 +218,20 @@ async function main(): Promise<void> {
       });
     }
     await db.pendingCaptures.delete(pendingData.id);
-    showMessage(t('captureSavedAutoClose'), true);
+    // Live countdown: 3, 2, 1, close. The close button stays available.
+    let remain = 3;
+    const applyCountdown = () => showMessage(t('captureSavedAutoClose').replace('{n}', String(remain)), true);
+    applyCountdown();
+    const timer = window.setInterval(() => {
+      remain--;
+      if (remain <= 0) {
+        window.clearInterval(timer);
+        window.close();
+        return;
+      }
+      applyCountdown();
+    }, 1000);
     btnSave.disabled = true;
-    setTimeout(() => window.close(), 3000);
   }
 
   function cancel(): void {

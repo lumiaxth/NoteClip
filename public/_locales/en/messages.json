@@ -36,7 +36,7 @@
   "confirmDelete": { "message": "Confirm delete" },
   "addedToast": { "message": "\"{n}\" has been saved" },
   "deletedToast": { "message": "\"{n}\" deleted" },
-  "captureSavedAutoClose": { "message": "Saved. This page will close automatically in 3 seconds." },
+  "captureSavedAutoClose": { "message": "Saved. Closing in {n}s…" },
   "sectionClipping": { "message": "Clipping" },
   "floatingButtonEnable": { "message": "Show floating clip button" },
   "floatingSaveFailed": { "message": "Save failed" },

@@ -1,17 +1,17 @@
 {
   "extensionName": { "message": "摘记本 NoteClip" },
   "extensionDescription": {
-    "message": "轻量级浏览器摘抄工具，随手摘录网页文字与截图，本地保存、随时回顾。"
+    "message": "轻量级浏览器摘记工具，随手摘录网页文字与截图，本地保存、随时回顾。"
   },
   "contextSaveSelection": { "message": "添加到摘记本" },
-  "contextCapture": { "message": "截图摘抄" },
-  "contextSaveImage": { "message": "保存图片到摘记本" },
+  "contextCapture": { "message": "截图摘记" },
+  "contextSaveImage": { "message": "添加图片到摘记本" },
   "floatingCapture": { "message": "摘抄" },
   "floatingSaved": { "message": "已保存 ✓" },
-  "panelSearchPlaceholder": { "message": "搜索摘抄内容或来源标题…" },
+  "panelSearchPlaceholder": { "message": "搜索摘记内容或来源标题…" },
   "filterAll": { "message": "全部" },
   "filterStarred": { "message": "星标" },
-  "screenshotBtn": { "message": "截图摘抄" },
+  "screenshotBtn": { "message": "截图摘记" },
   "exportBtn": { "message": "导出" },
   "importBtn": { "message": "导入" },
   "importTitle": { "message": "选择导入方式" },
@@ -27,17 +27,17 @@
   "newTagPlaceholder": { "message": "+ 新标签" },
   "noTags": { "message": "暂无标签" },
   "emptyAll": {
-    "message": "还没有摘抄。选中网页文字右键“添加到摘记本”，或点击选中后出现的浮动「摘抄」按钮。"
+    "message": "还没有摘记。选中网页文字右键“添加到摘记本”，或点击选中后出现的浮动「摘抄」按钮。"
   },
-  "emptyFiltered": { "message": "没有匹配的摘抄" },
+  "emptyFiltered": { "message": "没有匹配的摘记" },
   "expandMore": { "message": "展开" },
   "collapse": { "message": "收起" },
   "settingsBtn": { "message": "设置" },
   "confirmDelete": { "message": "确认删除" },
   "addedToast": { "message": "「{n}」已成功录入" },
   "deletedToast": { "message": "「{n}」已删除" },
-  "captureSavedAutoClose": { "message": "摘记成功，3 秒后自动关闭本页面" },
-  "sectionClipping": { "message": "摘抄" },
+  "captureSavedAutoClose": { "message": "摘记成功，{n} 秒后自动关闭本页面" },
+  "sectionClipping": { "message": "摘记" },
   "floatingButtonEnable": { "message": "显示浮动摘记按钮" },
   "floatingSaveFailed": { "message": "保存失败" },
   "settingsTitle": { "message": "设置" },
@@ -60,7 +60,7 @@
   "save": { "message": "保存" },
   "invalidShortcut": { "message": "快捷键格式无效" },
   "cmdOpenPanel": { "message": "打开摘记本面板" },
-  "cmdStartCapture": { "message": "截图摘抄" },
+  "cmdStartCapture": { "message": "截图摘记" },
   "filterText": { "message": "文字" },
   "filterImage": { "message": "图片" },
   "exportTitle": { "message": "选择导出格式" },
@@ -80,10 +80,10 @@
     "message": "每行一个域名，如：\nweibo.com\nxiaohongshu.com"
   },
   "autoSaveHint": {
-    "message": "开启后，通过浏览器下载图片时会自动保存一份图片摘抄到摘记本。"
+    "message": "开启后，通过浏览器下载图片时会自动保存一份图片到摘记本。"
   },
   "autoSaveTitle": { "message": "自动保存 · {d}" },
-  "floatingClipImage": { "message": "摘抄此图" },
+  "floatingClipImage": { "message": "摘记此图" },
   "clippingNow": { "message": "正在保存…" },
   "viewerEmpty": { "message": "图片不存在或已被删除" },
   "viewerTitle": { "message": "摘记本 · 查看图片" },
@@ -110,7 +110,7 @@
   "timeMinutesAgo": { "message": "{n} 分钟前" },
   "timeHoursAgo": { "message": "{n} 小时前" },
   "timeDaysAgo": { "message": "{n} 天前" },
-  "captureTitle": { "message": "截图摘抄 - 框选要保存的区域" },
+  "captureTitle": { "message": "截图摘记 - 框选要保存的区域" },
   "captureFull": { "message": "全选" },
   "captureConfirm": { "message": "保存" },
   "captureCancel": { "message": "取消" },
