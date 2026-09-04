@@ -27,6 +27,12 @@ export function setupReminder(): void {
       .catch(() => undefined);
   });
 
+  // The backup reminder is the only notification; clicking it opens the
+  // settings page where the export buttons live.
+  browser.notifications.onClicked.addListener(() => {
+    void browser.runtime.openOptionsPage();
+  });
+
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes['noteclip:settings']) {
       void syncReminderAlarm();

@@ -123,6 +123,8 @@ body.nc-popup {
   display: flex;
   align-items: center;
   gap: 6px;
+  row-gap: 6px;
+  flex-wrap: wrap;
 }
 
 .nc-toolbar-2 {
@@ -170,12 +172,95 @@ body.nc-popup {
   opacity: 0.9;
 }
 
-.nc-tagbar {
-  display: flex;
-  flex-wrap: wrap;
+.nc-chip.nc-chip-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.nc-chip.nc-chip-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* Gold star filter chip */
+.nc-chip.nc-chip-star {
+  color: var(--star);
+}
+
+.nc-chip.nc-chip-star:hover {
+  color: var(--star);
+  border-color: var(--star);
+}
+
+.nc-chip.nc-chip-star.active {
+  background: var(--star);
+  border-color: var(--star);
+  color: #fff;
+}
+
+/* Batch selection mode */
+.nc-batchbar {
   align-items: center;
-  gap: 5px;
-  min-height: 26px;
+}
+
+.nc-selected-count {
+  font-size: 12.5px;
+  color: var(--primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nc-select-box {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+  background: var(--input);
+  cursor: pointer;
+}
+
+.nc-select-box.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.nc-select-box.checked::after {
+  content: '✓';
+}
+
+.nc-card.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+
+/* Search hit highlight */
+.nc-hl {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* Export dialog filter toggle */
+.nc-export-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+/* The tagbar dissolves into the first toolbar row so its chips wrap
+   individually with the other filter buttons instead of as one block. */
+.nc-tagbar {
+  display: contents;
 }
 
 .nc-tag-chip.active {
@@ -448,6 +533,15 @@ body.nc-popup {
   color: var(--text);
 }
 
+/* Starred clips keep a golden star */
+.nc-star.starred {
+  color: var(--star);
+}
+
+.nc-star.starred:hover {
+  color: var(--star);
+}
+
 .nc-action-delete:hover {
   color: var(--danger);
 }
@@ -503,6 +597,51 @@ body.nc-popup {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Batch tag dialog: full-width input + tappable existing tags */
+.nc-dialog input[type='text'] {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--input);
+  color: var(--text);
+  outline: none;
+}
+
+.nc-dialog input[type='text']:focus {
+  border-color: var(--primary);
+}
+
+.nc-dialog-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 14px;
+  min-height: 18px;
+}
+
+.nc-dialog-tag {
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 9px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.nc-dialog-tag:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.nc-dialog-actions-row {
+  flex-direction: row;
+}
+
+.nc-dialog-actions-row .nc-btn {
+  flex: 1;
 }
 
 .nc-btn {

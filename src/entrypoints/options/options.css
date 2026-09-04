@@ -121,6 +121,38 @@ input[type='text']:focus {
   flex: 1;
 }
 
+/* Tag management: flat chips mirroring the panel tagbar */
+.nc-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nc-tag-edit-chip {
+  font-size: 12.5px;
+  padding: 4px 10px;
+}
+
+.nc-tag-edit-chip .tag-name {
+  cursor: pointer;
+}
+
+.nc-tag-edit-chip .tag-name:hover {
+  text-decoration: underline;
+}
+
+.nc-tag-edit-chip input[type='text'] {
+  width: 110px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 12.5px;
+  background: var(--input);
+  color: var(--text);
+  outline: none;
+}
+
 .shortcut-row {
   display: flex;
   align-items: center;
@@ -229,6 +261,13 @@ textarea.site-list {
 .nc-btn.danger {
   color: var(--danger);
   border-color: var(--danger);
+}
+
+.nc-btn-mini {
+  min-width: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 6px;
 }
 
 .nc-dialog {

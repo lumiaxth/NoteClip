@@ -1,12 +1,28 @@
 {
-  "extensionName": { "message": "摘记本 NoteClip" },
+  "extensionName": { "message": "摘记本 - 网页摘录·截图·图片剪藏" },
+  "panelTitle": { "message": "摘记本" },
   "extensionDescription": {
-    "message": "轻量级浏览器摘记工具，随手摘录网页文字与截图，本地保存、随时回顾。"
+    "message": "网页摘录、截图、图片剪藏，本地保存的轻量级摘记本。一站式检索、整理、批注。支持小红书、抖音、微博等主流网站。"
   },
   "contextSaveSelection": { "message": "添加到摘记本" },
   "contextCapture": { "message": "截图摘记" },
   "contextSaveImage": { "message": "添加图片到摘记本" },
-  "floatingCapture": { "message": "摘抄" },
+  "floatingCapture": { "message": "摘记" },
+  "copyAction": { "message": "复制" },
+  "copiedToast": { "message": "已复制到剪贴板" },
+  "copyFailToast": { "message": "复制失败" },
+  "exportFiltered": { "message": "仅导出当前筛选结果（{n} 条）" },
+  "selectMode": { "message": "多选" },
+  "exitSelect": { "message": "完成" },
+  "selectedCount": { "message": "已选 {n} 条" },
+  "selectAll": { "message": "全选" },
+  "batchDelete": { "message": "删除所选" },
+  "batchDeleteConfirm": { "message": "确认删除所选 {n} 条摘记？" },
+  "batchTag": { "message": "添加标签" },
+  "batchTagTitle": { "message": "为 {n} 条摘记添加标签" },
+  "batchDeletedToast": { "message": "已删除 {n} 条摘记" },
+  "batchTagDoneToast": { "message": "已为 {n} 条摘记添加标签" },
+  "statsUsage": { "message": "已存摘记 {n} 条（图片 {img} 张），占用约 {s} MB" },
   "floatingSaved": { "message": "已保存 ✓" },
   "panelSearchPlaceholder": { "message": "搜索摘记内容或来源标题…" },
   "filterAll": { "message": "全部" },
@@ -27,7 +43,7 @@
   "newTagPlaceholder": { "message": "+ 新标签" },
   "noTags": { "message": "暂无标签" },
   "emptyAll": {
-    "message": "还没有摘记。选中网页文字右键“添加到摘记本”，或点击选中后出现的浮动「摘抄」按钮。"
+    "message": "还没有摘记。选中网页文字右键“添加到摘记本”，或点击选中后出现的浮动「摘记」按钮。"
   },
   "emptyFiltered": { "message": "没有匹配的摘记" },
   "expandMore": { "message": "展开" },

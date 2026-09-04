@@ -14,6 +14,8 @@ const ACCENT_PRESETS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '
 let settings: Settings;
 let toastTimer: number | undefined;
 let pendingImport: Awaited<ReturnType<typeof readExportFile>> | null = null;
+/** Latest error report rows, for the per-row copy button. */
+let latestErrors: Awaited<ReturnType<typeof listErrors>> = [];
 
 function toast(msg: string): void {
   let el = document.getElementById('toast');
@@ -98,45 +100,17 @@ async function renderTags(): Promise<void> {
     list.innerHTML = `<p class="muted">${t('noTags')}</p>`;
     return;
   }
-  list.innerHTML = tags
+  // Flat chip layout mirroring the panel tagbar: click the name to rename
+  // inline, × to delete (with in-place confirmation).
+  list.innerHTML = `<div class="nc-tag-chips">${tags
     .map(
       (tag) => `
-      <div class="tag-row" data-id="${tag.id}" data-name="${esc(tag.name)}">
-        <input type="text" data-action="tag-rename" value="${esc(tag.name)}" placeholder="${t('tagPlaceholder')}" />
-        <button class="nc-btn danger" data-action="tag-delete" data-id="${tag.id}">${t('delete')}</button>
-      </div>`,
+      <span class="nc-chip-tag nc-tag-edit-chip" data-id="${tag.id}" data-name="${esc(tag.name)}">
+        #<span class="tag-name" data-action="tag-rename">${esc(tag.name)}</span>
+        <button class="nc-tag-x" data-action="tag-delete" data-id="${tag.id}" title="${esc(t('deleteTag'))}">×</button>
+      </span>`,
     )
-    .join('');
-}
-
-/** Replace a row's delete button with inline confirm/cancel buttons. */
-function armDelete(row: HTMLElement, confirmAction: string, cancelAction: string): void {
-  const del = row.querySelector<HTMLButtonElement>('[data-action="tag-delete"], [data-action="delete"]');
-  if (!del || row.querySelector('.nc-confirm-del')) return;
-  const wrap = document.createElement('span');
-  wrap.className = 'nc-confirm-del';
-  const ok = document.createElement('button');
-  ok.className = 'nc-btn danger';
-  ok.dataset.action = confirmAction;
-  ok.textContent = t('confirmDelete');
-  const no = document.createElement('button');
-  no.className = 'nc-btn';
-  no.dataset.action = cancelAction;
-  no.textContent = t('cancel');
-  wrap.append(ok, no);
-  del.replaceWith(wrap);
-}
-
-/** Restore the original delete button after a cancelled confirmation. */
-function disarmDelete(row: HTMLElement, action: 'tag-delete' | 'delete'): void {
-  const wrap = row.querySelector('.nc-confirm-del');
-  if (!wrap) return;
-  const btn = document.createElement('button');
-  btn.className = 'nc-btn danger';
-  btn.dataset.action = action;
-  btn.dataset.id = row.dataset.id ?? '';
-  btn.textContent = t('delete');
-  wrap.replaceWith(btn);
+    .join('')}</div>`;
 }
 
 async function renderClipping(): Promise<void> {
@@ -248,6 +222,7 @@ async function renderErrors(): Promise<void> {
   const list = document.getElementById('error-list');
   if (!list) return;
   const errors = await listErrors();
+  latestErrors = errors;
   if (!errors.length) {
     list.innerHTML = `<p class="muted">${t('errorsEmpty')}</p>`;
     return;
@@ -255,14 +230,35 @@ async function renderErrors(): Promise<void> {
   list.innerHTML = errors
     .map(
       (e) => `
-      <div class="error-row">
+      <div class="error-row" data-id="${e.id}">
         <span class="error-time">${esc(fullTime(e.timestamp))}</span>
         <span class="error-source">${esc(e.source)}</span>
         <span class="error-message">${esc(e.message)}</span>
         ${e.url ? `<a class="error-url" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.url)}</a>` : ''}
+        <button class="nc-btn nc-btn-mini" data-action="error-copy" data-id="${e.id}">${esc(t('copyAction'))}</button>
       </div>`,
     )
     .join('');
+}
+
+/** Storage footprint + clip counts, shown next to the backup controls. */
+async function renderStorage(): Promise<void> {
+  const el = document.getElementById('storage-stats');
+  if (!el) return;
+  const snippets = await db.snippets.toArray();
+  const images = snippets.filter((s) => s.kind === 'image').length;
+  let usage = 0;
+  try {
+    const est = await navigator.storage.estimate();
+    usage = est.usage ?? 0;
+  } catch {
+    usage = 0;
+  }
+  const mb = (usage / (1024 * 1024)).toFixed(1);
+  el.textContent = t('statsUsage')
+    .replace('{n}', String(snippets.length))
+    .replace('{img}', String(images))
+    .replace('{s}', mb);
 }
 
 export async function initOptions(root: HTMLElement): Promise<void> {
@@ -313,6 +309,7 @@ export async function initOptions(root: HTMLElement): Promise<void> {
           <input type="file" id="import-file" accept=".json,application/json" hidden />
         </div>
         <p class="muted" id="last-backup"></p>
+        <p class="muted" id="storage-stats"></p>
         <dialog id="export-dialog" class="nc-dialog">
           <h3>${esc(t('exportTitle'))}</h3>
           <div class="nc-dialog-actions">
@@ -445,33 +442,45 @@ export async function initOptions(root: HTMLElement): Promise<void> {
     const target = e.target as HTMLElement;
     const el = target.closest<HTMLElement>('[data-action]');
     if (!el) return;
-    const row = el.closest('.tag-row') as HTMLElement;
+    const chip = el.closest('.nc-tag-edit-chip') as HTMLElement;
     const action = el.dataset.action;
     if (action === 'tag-delete') {
-      armDelete(row, 'tag-delete-confirm', 'tag-delete-cancel');
+      // In-place confirmation inside the chip.
+      chip.innerHTML = `
+        <button class="nc-btn danger nc-btn-mini" data-action="tag-delete-confirm" data-id="${chip.dataset.id}">${esc(t('confirmDelete'))}</button>
+        <button class="nc-btn nc-btn-mini" data-action="tag-delete-cancel">${esc(t('cancel'))}</button>`;
     } else if (action === 'tag-delete-confirm') {
-      const name = row.dataset.name ?? '';
-      void deleteTag(row.dataset.id!).then(async () => {
+      const name = chip.dataset.name ?? '';
+      void deleteTag(chip.dataset.id!).then(async () => {
         toast(t('deletedToast').replace('{n}', name));
         await renderTags();
       });
     } else if (action === 'tag-delete-cancel') {
-      disarmDelete(row, 'tag-delete');
+      void renderTags();
+    } else if (action === 'tag-rename') {
+      const id = chip.dataset.id!;
+      const name = chip.dataset.name ?? '';
+      chip.innerHTML = `<input type="text" data-action="tag-rename-input" value="${esc(name)}" />`;
+      const input = chip.querySelector<HTMLInputElement>('input')!;
+      input.focus();
+      input.select();
+      const commit = () => {
+        if (input.dataset.done) return;
+        input.dataset.done = '1';
+        const value = input.value.trim();
+        if (!value || value === name) return void renderTags();
+        void renameTag(id, value).then((res) => {
+          if (!res) toast(t('tagConflict'));
+          else toast(t('settingsSaved'));
+          void renderTags();
+        });
+      };
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') commit();
+        if (ev.key === 'Escape') renderTags();
+      });
+      input.addEventListener('focusout', commit);
     }
-  });
-
-  tagList.addEventListener('change', (e) => {
-    const target = e.target as HTMLInputElement;
-    if (target.dataset.action !== 'tag-rename') return;
-    const row = target.closest('.tag-row') as HTMLElement;
-    const id = row.dataset.id!;
-    void renameTag(id, target.value).then((res) => {
-      if (!res) {
-        toast(t('tagConflict'));
-        return renderTags();
-      }
-      toast(t('settingsSaved'));
-    });
   });
 
   // Shortcuts delegation: open the browser's shortcut settings page.
@@ -487,6 +496,22 @@ export async function initOptions(root: HTMLElement): Promise<void> {
     void clearErrors().then(renderErrors);
   });
 
+  // Copy a single error report row for easy bug reporting.
+  const errorList = root.querySelector('#error-list') as HTMLElement;
+  errorList.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="error-copy"]');
+    if (!btn) return;
+    const err = latestErrors.find((x) => x.id === btn.dataset.id);
+    if (!err) return;
+    const text = [fullTime(err.timestamp), err.source, err.message, err.url ?? '']
+      .filter(Boolean)
+      .join('\n');
+    void navigator.clipboard.writeText(text).then(
+      () => toast(t('copiedToast')),
+      () => toast(t('copyFailToast')),
+    );
+  });
+
   renderTheme();
   renderLastBackup();
   await renderTags();
@@ -494,6 +519,7 @@ export async function initOptions(root: HTMLElement): Promise<void> {
   await renderClipping();
   await renderReminder();
   await renderErrors();
+  await renderStorage();
 }
 
 void initTheme();

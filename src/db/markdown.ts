@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import type { Snippet, Tag } from '@/types';
-import { db } from '@/db';
+import { db, listSnippets, type ListFilter } from '@/db';
 import { uuid } from '@/utils/id';
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -44,8 +44,8 @@ export interface MarkdownExport {
 }
 
 /** Build a Markdown document plus an images/ folder for a zip export. */
-export async function buildMarkdownExport(): Promise<MarkdownExport> {
-  const snippets = await db.snippets.toArray();
+export async function buildMarkdownExport(filter: ListFilter = {}): Promise<MarkdownExport> {
+  const snippets = await listSnippets(filter);
   const tagMap = new Map((await db.tags.toArray()).map((tag) => [tag.id, tag.name]));
   const items = [...snippets].sort((a, b) => a.timestamp - b.timestamp);
 

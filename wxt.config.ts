@@ -14,9 +14,6 @@ export default defineConfig({
       modulePreload: false,
     },
   }),
-  suppressWarnings: {
-    firefoxDataCollection: true,
-  },
   manifest: ({ browser }) => {
     const isFirefox = browser === 'firefox';
     const permissions = [
@@ -35,10 +32,10 @@ export default defineConfig({
     return {
       name: '__MSG_extensionName__',
       description: '__MSG_extensionDescription__',
-      default_locale: 'zh_CN',
+      default_locale: 'en',
       permissions,
       host_permissions: ['<all_urls>'],
-      action: isFirefox ? undefined : {},
+      action: isFirefox ? undefined : { default_title: '__MSG_panelTitle__' },
       commands: {
         'open-panel': {
           suggested_key: { default: 'Alt+Shift+N' },
@@ -50,7 +47,13 @@ export default defineConfig({
         },
       },
       browser_specific_settings: {
-        gecko: { id: 'noteclip@local.dev' },
+        gecko: {
+          id: 'noteclip@local.dev',
+          // The extension makes no network requests and collects no data.
+          data_collection_permissions: {
+            required: ['none'],
+          },
+        },
       },
     };
   },

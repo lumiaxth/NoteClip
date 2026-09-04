@@ -3,6 +3,8 @@ import {
   db,
   addSnippet,
   deleteSnippet,
+  deleteSnippets,
+  addTagToSnippets,
   setComment,
   toggleStar,
   createTag,
@@ -187,9 +189,68 @@ describe('kind filter', () => {
   });
 });
 
+describe('filtered export', () => {
+  it('exportData respects filters and prunes unreferenced tags', async () => {
+    const tagA = await createTag('a');
+    const tagB = await createTag('b');
+    await addSnippet({ kind: 'text', text: 'alpha', url: 'u', title: 't', tags: [tagA!.id] });
+    await addSnippet({ kind: 'image', image: new Blob([new Uint8Array([1])], { type: 'image/png' }), url: 'u', title: 'pic', tags: [tagB!.id] });
+
+    const full = await exportData();
+    expect(full.snippets).toHaveLength(2);
+    expect(full.tags).toHaveLength(2);
+
+    const filtered = await exportData({ kind: 'text' });
+    expect(filtered.snippets).toHaveLength(1);
+    expect(filtered.snippets[0]!.text).toBe('alpha');
+    expect(filtered.tags.map((t) => t.name)).toEqual(['a']);
+
+    const byStar = await exportData({ starredOnly: true });
+    expect(byStar.snippets).toHaveLength(0);
+    expect(byStar.tags).toHaveLength(0);
+  });
+
+  it('buildMarkdownExport honors filters', async () => {
+    await addSnippet({ kind: 'text', text: 'keep me', url: 'u', title: 'k' });
+    await addSnippet({ kind: 'text', text: 'skip me', url: 'u', title: 's' });
+    const data = await buildMarkdownExport({ query: 'keep' });
+    expect(data.md).toContain('keep me');
+    expect(data.md).not.toContain('skip me');
+  });
+});
+
+describe('bulk operations', () => {
+  it('deleteSnippets removes many at once', async () => {
+    const a = await addSnippet({ kind: 'text', text: 'a', url: 'u', title: 't' });
+    const b = await addSnippet({ kind: 'text', text: 'b', url: 'u', title: 't' });
+    await addSnippet({ kind: 'text', text: 'c', url: 'u', title: 't' });
+    await deleteSnippets([a.id, b.id]);
+    const items = await listSnippets();
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe('c');
+  });
+
+  it('addTagToSnippets merges without losing existing tags', async () => {
+    const t1 = await createTag('one');
+    const t2 = await createTag('two');
+    const s = await addSnippet({ kind: 'text', text: 'x', url: 'u', title: 't', tags: [t1!.id] });
+    await addTagToSnippets([s.id], t2!.id);
+    const snip = (await listSnippets())[0]!;
+    expect([...snip.tags].sort()).toEqual([t1!.id, t2!.id].sort());
+  });
+
+  it('addTagToSnippets skips missing snippets', async () => {
+    const tag = await createTag('x');
+    await addTagToSnippets(['nonexistent-id'], tag!.id);
+    expect(await listSnippets()).toHaveLength(0);
+  });
+});
+
 describe('error log', () => {
   it('records and lists errors newest first', async () => {
     await logError('save-image', 'HTTP 403', 'https://a.com/pic.jpg');
+    // Ensure distinct timestamps so newest-first ordering is deterministic.
+    await new Promise((resolve) => setTimeout(resolve, 2));
     await logError('capture', 'not-web');
     const errors = await listErrors();
     expect(errors).toHaveLength(2);

@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import type { ExportFile, ExportSnippet, Snippet } from '@/types';
-import { db, bumpVersion } from '@/db';
+import { db, bumpVersion, listSnippets, type ListFilter } from '@/db';
 import { uuid } from '@/utils/id';
 import { buildMarkdownExport, markdownExportZip } from './markdown';
 
@@ -24,9 +24,15 @@ export function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
-export async function exportData(): Promise<ExportFile> {
-  const snippets = await db.snippets.toArray();
+export async function exportData(filter: ListFilter = {}): Promise<ExportFile> {
+  const snippets = await listSnippets(filter);
   const tags = await db.tags.toArray();
+  const exportedTagIds = new Set(snippets.flatMap((s) => s.tags));
+  // Keep only tags actually referenced by the exported snippets (and only
+  // when a filter narrows the export; a full export keeps everything).
+  const tagsForExport = filter.query || filter.starredOnly || filter.tagId || filter.kind
+    ? tags.filter((t) => exportedTagIds.has(t.id))
+    : tags;
   const exportSnippets: ExportSnippet[] = await Promise.all(
     snippets.map(async (s) => ({
       id: s.id,
@@ -41,7 +47,7 @@ export async function exportData(): Promise<ExportFile> {
       timestamp: s.timestamp,
     })),
   );
-  return { app: 'NoteClip', version: 1, exportedAt: Date.now(), snippets: exportSnippets, tags };
+  return { app: 'NoteClip', version: 1, exportedAt: Date.now(), snippets: exportSnippets, tags: tagsForExport };
 }
 
 function toSnippet(s: ExportSnippet): Snippet {
@@ -101,8 +107,8 @@ export async function importData(file: ExportFile, mode: 'overwrite' | 'merge'):
   await bumpVersion();
 }
 
-export async function downloadExport(): Promise<void> {
-  const data = await exportData();
+export async function downloadExport(filter: ListFilter = {}): Promise<void> {
+  const data = await exportData(filter);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = await blobToDataUrl(blob);
   const stamp = new Date().toISOString().slice(0, 10);
@@ -110,8 +116,8 @@ export async function downloadExport(): Promise<void> {
 }
 
 /** Build and download a Markdown export zip (notes.md + images/). */
-export async function downloadMarkdownExport(): Promise<void> {
-  const data = await buildMarkdownExport();
+export async function downloadMarkdownExport(filter: ListFilter = {}): Promise<void> {
+  const data = await buildMarkdownExport(filter);
   const blob = markdownExportZip(data);
   const url = await blobToDataUrl(blob);
   const stamp = new Date().toISOString().slice(0, 10);

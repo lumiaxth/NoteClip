@@ -63,6 +63,26 @@ export async function deleteSnippet(id: string): Promise<void> {
   await bumpVersion();
 }
 
+/** Bulk delete (batch mode); ids not found are ignored. */
+export async function deleteSnippets(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  await db.snippets.bulkDelete(ids);
+  await bumpVersion();
+}
+
+/** Add a tag to the given snippets, merging with their existing tags. */
+export async function addTagToSnippets(ids: string[], tagId: string): Promise<void> {
+  if (!ids.length) return;
+  await db.transaction('rw', db.snippets, async () => {
+    for (const id of ids) {
+      const s = await db.snippets.get(id);
+      if (!s || s.tags.includes(tagId)) continue;
+      await db.snippets.update(id, { tags: [...s.tags, tagId] });
+    }
+  });
+  await bumpVersion();
+}
+
 export async function setComment(id: string, comment: string): Promise<void> {
   await db.snippets.update(id, { comment });
   await bumpVersion();
