@@ -2,6 +2,8 @@ import { strToU8, zipSync } from 'fflate';
 import type { Snippet, Tag } from '@/types';
 import { db, listSnippets, type ListFilter } from '@/db';
 import { uuid } from '@/utils/id';
+import type { ProgressFn } from './io';
+import { t, fullTime } from '@/utils/i18n';
 
 const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
@@ -44,24 +46,31 @@ export interface MarkdownExport {
 }
 
 /** Build a Markdown document plus an images/ folder for a zip export. */
-export async function buildMarkdownExport(filter: ListFilter = {}): Promise<MarkdownExport> {
-  const snippets = await listSnippets(filter);
+export async function buildMarkdownExport(
+  filter: ListFilter = {},
+  opts: { noImages?: boolean; onProgress?: ProgressFn } = {},
+): Promise<MarkdownExport> {
+  const noImages = opts.noImages === true;
+  let snippets = await listSnippets(filter);
+  if (noImages) snippets = snippets.filter((s) => s.kind === 'text');
   const tagMap = new Map((await db.tags.toArray()).map((tag) => [tag.id, tag.name]));
   const items = [...snippets].sort((a, b) => a.timestamp - b.timestamp);
 
   const imageFiles: Record<string, Uint8Array> = {};
   const usedNames = new Set<string>();
   const parts: string[] = [
-    '# 摘记本 NoteClip',
+    `# ${t('markdownTitle')}`,
     '',
-    `> 导出时间：${fmtTime(Date.now())}，共 ${items.length} 条摘记`,
+    `> ${t('markdownMeta').replace('{time}', fmtTime(Date.now())).replace('{n}', String(items.length))}`,
     '',
   ];
 
-  for (const s of items) {
+  for (let i = 0; i < items.length; i++) {
+    const s = items[i]!;
+    opts.onProgress?.(i + 1, items.length);
     parts.push('---', '', `## ${s.title || '未命名'}`, '');
     const meta: string[] = [fmtTime(s.timestamp)];
-    if (s.url) meta.push(`[来源](${s.url})`);
+    if (s.url) meta.push(`[${t('markdownSource')}](${s.url})`);
     const tagNames = s.tags.map((id) => tagMap.get(id)).filter(Boolean) as string[];
     if (tagNames.length) meta.push(tagNames.map((n) => `\`#${escCell(n)}\``).join(' '));
     if (s.starred) meta.push('★');

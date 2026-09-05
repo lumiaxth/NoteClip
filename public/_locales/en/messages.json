@@ -82,6 +82,19 @@
   "exportTitle": { "message": "Choose export format" },
   "exportJson": { "message": "JSON backup" },
   "exportMarkdown": { "message": "Markdown ZIP (with images folder)" },
+  "exportHtmlBtn": { "message": "Web page (single file)" },
+  "copySource": { "message": "Source" },
+  "markdownTitle": { "message": "NoteClip Export" },
+  "markdownMeta": { "message": "Exported at {time}, {n} clips" },
+  "markdownSource": { "message": "Source" },
+  "exportNoImages": { "message": "Lightweight backup (no images)" },
+  "exporting": { "message": "Exporting…" },
+  "importPreview": {
+    "message": "This file contains {n} clips ({m} images); {k} duplicate(s) already in your library."
+  },
+  "skipDuplicates": { "message": "Skip duplicates" },
+  "importProgress": { "message": "Processing… ({p}/{t})" },
+  "importDoneReport": { "message": "Import finished: {n} imported, {d} skipped, {f} failed" },
   "sectionErrors": { "message": "Error report" },
   "errorsHint": {
     "message": "Failed clipping operations are recorded here (stored locally only, up to 100 entries) for troubleshooting."

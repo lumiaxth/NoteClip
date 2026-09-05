@@ -11,7 +11,17 @@ import {
   deleteTag,
   db,
 } from '@/db';
-import { downloadExport, downloadMarkdownExport, readExportFile, importData } from '@/db/io';
+import {
+  buildBackup,
+  downloadExport,
+  downloadMarkdownExport,
+  previewImport,
+  readBackupZip,
+  importBackup,
+  type BackupContent,
+  type ProgressFn,
+} from '@/db/io';
+import { downloadHtmlExport } from '@/db/htmlExport';
 import type { Snippet, Tag } from '@/types';
 import { t, relTime, fullTime } from '@/utils/i18n';
 import { domainOf, esc, escHighlighted, textFragmentUrl } from '@/utils/format';
@@ -206,7 +216,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
         <button id="nc-settings" class="nc-chip" title="${t('settingsBtn')}">⚙</button>
         <button id="nc-export" class="nc-chip" title="${t('exportBtn')}">${t('exportBtn')}</button>
         <button id="nc-import" class="nc-chip" title="${t('importBtn')}">${t('importBtn')}</button>
-        <input id="nc-import-file" type="file" accept=".json,application/json" hidden />
+          <input id="nc-import-file" type="file" accept=".zip,application/zip" hidden />
       </div>
     </header>
     <main class="nc-main" id="nc-main">
@@ -220,14 +230,26 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
         <input type="checkbox" id="nc-export-filtered" />
         <span id="nc-export-filtered-label"></span>
       </label>
+      <label class="nc-export-filter">
+        <input type="checkbox" id="nc-export-light" />
+        <span>${t('exportNoImages')}</span>
+      </label>
+      <p class="nc-progress" id="nc-export-progress" hidden></p>
       <div class="nc-dialog-actions">
         <button data-format="json" class="nc-btn nc-primary">${t('exportJson')}</button>
         <button data-format="markdown" class="nc-btn">${t('exportMarkdown')}</button>
+        <button data-format="html" class="nc-btn">${t('exportHtmlBtn')}</button>
         <button data-format="cancel" class="nc-btn">${t('cancel')}</button>
       </div>
     </dialog>
     <dialog id="nc-import-dialog" class="nc-dialog">
       <h3 class="nc-dialog-title">${t('importTitle')}</h3>
+      <p class="nc-import-preview" id="nc-import-preview"></p>
+      <label class="nc-export-filter" id="nc-import-skip-row" hidden>
+        <input type="checkbox" id="nc-import-skip" checked />
+        <span>${t('skipDuplicates')}</span>
+      </label>
+      <p class="nc-progress" id="nc-import-progress" hidden></p>
       <div class="nc-dialog-actions">
         <button data-mode="overwrite" class="nc-btn nc-primary">${t('importOverwrite')}</button>
         <button data-mode="merge" class="nc-btn">${t('importMerge')}</button>
@@ -291,6 +313,12 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   const exportDialog = root.querySelector('#nc-export-dialog') as HTMLDialogElement;
   const exportFiltered = root.querySelector('#nc-export-filtered') as HTMLInputElement;
   const exportFilteredLabel = root.querySelector('#nc-export-filtered-label') as HTMLElement;
+  const exportLight = root.querySelector('#nc-export-light') as HTMLInputElement;
+  const exportProgress = root.querySelector('#nc-export-progress') as HTMLElement;
+  const importPreview = root.querySelector('#nc-import-preview') as HTMLElement;
+  const importSkipRow = root.querySelector('#nc-import-skip-row') as HTMLElement;
+  const importSkip = root.querySelector('#nc-import-skip') as HTMLInputElement;
+  const importProgress = root.querySelector('#nc-import-progress') as HTMLElement;
 
   /** Render one page of cards and advance the cursor. */
   function appendPage(): void {
@@ -347,7 +375,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   async function copySnippet(s: Snippet): Promise<void> {
     try {
       if (s.kind === 'text' || !s.image) {
-        if (s.text) await navigator.clipboard.writeText(s.text);
+        if (s.text) await copyRichText(s);
       } else {
         await copyImageBlob(s.image);
       }
@@ -355,6 +383,23 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
     } catch {
       toast(t('copyFailToast'));
     }
+  }
+
+  /** Text clips copy as both plain text and rich HTML so pasting into note
+   * apps (Evernote/OneNote/Youdao…) keeps the source link and time. */
+  async function copyRichText(s: Snippet): Promise<void> {
+    const plain = s.text ?? '';
+    const esc2 = (v: string) => v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+    const body = esc2(plain).replace(/\n/g, '<br />');
+    const source = s.url
+      ? `<div><small>${esc2(t('copySource'))}: <a href="${esc2(s.url)}">${esc2(s.title || s.url)}</a> · ${esc2(fullTime(s.timestamp))}</small></div>`
+      : '';
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/plain': plain,
+        'text/html': `<div style="white-space:pre-wrap;font-family:system-ui,sans-serif">${body}</div>${source}`,
+      }),
+    ]);
   }
 
   async function copyImageBlob(blob: Blob): Promise<void> {
@@ -550,55 +595,121 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
 
   exportBtn.addEventListener('click', () => {
     exportFiltered.checked = false;
+    exportLight.checked = false;
     exportFilteredLabel.textContent = t('exportFiltered').replace('{n}', String(lastFilterCount));
+    exportProgress.hidden = true;
+    exportProgress.textContent = '';
     exportDialog.showModal();
   });
 
   exportDialog.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-format]');
     if (!btn) return;
-    const format = btn.dataset.format as 'json' | 'markdown' | 'cancel';
-    exportDialog.close();
-    if (format === 'cancel') return;
+    const format = btn.dataset.format as 'json' | 'markdown' | 'html' | 'cancel';
+    if (format === 'cancel') {
+      exportDialog.close();
+      return;
+    }
     const filter = exportFiltered.checked ? currentFilter() : {};
-    const download = format === 'json' ? downloadExport : downloadMarkdownExport;
-    download(filter).catch(() => toast(t('exportError')));
+    const noImages = exportLight.checked;
+    // Show progress inside the dialog while the export is being built.
+    exportProgress.textContent = t('exporting');
+    exportProgress.hidden = false;
+    exportDialog
+      .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+      .forEach((b) => (b.disabled = true));
+    const onProgress: ProgressFn = (done, total) => {
+      exportProgress.textContent = t('importProgress').replace('{p}', String(done)).replace('{t}', String(total));
+    };
+    const download =
+      format === 'json'
+        ? downloadExport
+        : format === 'markdown'
+          ? downloadMarkdownExport
+          : downloadHtmlExport;
+    download(filter, { noImages, onProgress })
+      .then(() => {
+        exportDialog.close();
+        toast(t('savedOk'));
+      })
+      .catch(() => toast(t('exportError')))
+      .finally(() => {
+        exportProgress.hidden = true;
+        exportDialog
+          .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+          .forEach((b) => (b.disabled = false));
+      });
   });
 
   importBtn.addEventListener('click', () => importFile.click());
+
+  let pendingContent: BackupContent | null = null;
 
   importFile.addEventListener('change', async () => {
     const file = importFile.files?.[0];
     importFile.value = '';
     if (!file) return;
     try {
-      const data = await readExportFile(file);
+      const content = await readBackupZip(file);
+      const preview = await previewImport(content);
+      pendingContent = content;
+      importPreview.textContent = t('importPreview')
+        .replace('{n}', String(preview.total))
+        .replace('{m}', String(preview.imageCount))
+        .replace('{k}', String(preview.duplicates));
+      importSkipRow.hidden = false;
+      importSkip.checked = true;
+      importProgress.hidden = true;
       dialog.showModal();
-      dialog.dataset.file = file.name;
-      pendingImport = data;
     } catch {
+      pendingContent = null;
       toast(t('importError'));
     }
   });
-
-  let pendingImport: Awaited<ReturnType<typeof readExportFile>> | null = null;
 
   dialog.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-mode]');
     if (!btn) return;
     const mode = btn.dataset.mode as 'overwrite' | 'merge' | 'cancel';
-    dialog.close();
-    if (mode === 'cancel' || !pendingImport) return;
-    importData(pendingImport, mode)
-      .then(async () => {
+    if (mode === 'cancel' || !pendingContent) {
+      dialog.close();
+      pendingContent = null;
+      return;
+    }
+    // "Overwrite" replaces everything, so duplicate skipping does not apply.
+    importSkipRow.hidden = mode !== 'merge';
+    const skipDuplicates = mode === 'merge' && importSkip.checked;
+    const total = pendingContent.data.snippets.length;
+    importProgress.textContent = t('importProgress').replace('{p}', '0').replace('{t}', String(total));
+    importProgress.hidden = false;
+    dialog
+      .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+      .forEach((b) => (b.disabled = true));
+    const onProgress: ProgressFn = (done, totalNow) => {
+      importProgress.textContent = t('importProgress')
+        .replace('{p}', String(done))
+        .replace('{t}', String(totalNow));
+    };
+    importBackup(pendingContent, mode, { skipDuplicates, onProgress })
+      .then(async (result) => {
+        dialog.close();
+        pendingContent = null;
         clearUrls();
-        toast(t('importDone'));
+        toast(
+          t('importDoneReport')
+            .replace('{n}', String(result.imported))
+            .replace('{d}', String(result.skipped))
+            .replace('{f}', String(result.failed)),
+        );
         await refreshTags();
         await refresh();
       })
       .catch(() => toast(t('importError')))
       .finally(() => {
-        pendingImport = null;
+        importProgress.hidden = true;
+        dialog
+          .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+          .forEach((b) => (b.disabled = false));
       });
   });
 

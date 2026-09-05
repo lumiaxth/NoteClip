@@ -76,6 +76,7 @@ async function main(): Promise<void> {
   btnCancel.textContent = t('captureCancel');
   btnClose.textContent = t('close');
   hintEl.textContent = t('captureHint');
+  document.title = t('captureTitle');
 
   function showMessage(msg: string, closable: boolean): void {
     overlayMsg.textContent = msg;

@@ -16,9 +16,28 @@ import {
   listErrors,
   clearErrors,
 } from '@/db';
-import { exportData, importData, blobToDataUrl, dataUrlToBlob } from '@/db/io';
+import {
+  buildBackup,
+  readBackupZip,
+  importBackup,
+  previewImport,
+  dataUrlToBlob,
+  type BackupContent,
+} from '@/db/io';
 import { buildMarkdownExport, markdownExportZip } from '@/db/markdown';
-import { unzipSync, strFromU8 } from 'fflate';
+import type { ExportFile } from '@/types';
+import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
+
+/** Unpack a built backup blob into a BackupContent (small test data, sync ok). */
+async function zipToContent(blob: Blob): Promise<BackupContent> {
+  const unzipped = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+  const data = JSON.parse(strFromU8(unzipped['data.json']!)) as ExportFile;
+  const images = new Map<string, Uint8Array>();
+  for (const [path, bytes] of Object.entries(unzipped)) {
+    if (path !== 'data.json' && path.startsWith('images/')) images.set(path, bytes);
+  }
+  return { data, images };
+}
 
 beforeEach(async () => {
   await db.delete();
@@ -95,68 +114,82 @@ describe('snippets CRUD', () => {
   });
 });
 
-describe('import/export', () => {
-  it('round-trips blobs through data URLs', async () => {
-    const blob = new Blob(['hello'], { type: 'text/plain' });
-    const url = await blobToDataUrl(blob);
-    expect(url.startsWith('data:text/plain;base64,')).toBe(true);
-    const back = dataUrlToBlob(url);
-    expect(await back.text()).toBe('hello');
+describe('zip backup export/import', () => {
+  it('builds a version-2 zip with data.json and an images folder', async () => {
+    const tag = await createTag('news');
+    await addSnippet({ kind: 'text', text: 'alpha', url: 'https://a.com', title: 'A', tags: [tag!.id] });
+    await addSnippet({ kind: 'image', image: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }), url: 'https://b.com', title: 'B' });
+
+    const { blob } = await buildBackup();
+    const content = await zipToContent(blob);
+
+    expect(content.data.version).toBe(2);
+    expect(content.data.snippets).toHaveLength(2);
+    const imageSnip = content.data.snippets.find((s) => s.kind === 'image')!;
+    expect(imageSnip.imageFile).toMatch(/^images\/.+\.png$/);
+    expect(imageSnip.imageBytes).toBe(3);
+    expect(content.images.get(imageSnip.imageFile!)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(content.data.tags.map((t) => t.name)).toEqual(['news']);
   });
 
-  it('export + overwrite import restores identical data', async () => {
+  it('lightweight backup excludes image clips', async () => {
+    await addSnippet({ kind: 'text', text: 't', url: 'u', title: 't' });
+    await addSnippet({ kind: 'image', image: new Blob([new Uint8Array([1])], { type: 'image/png' }), url: 'u', title: 'p' });
+
+    const { blob } = await buildBackup({}, { noImages: true });
+    const content = await zipToContent(blob);
+    expect(content.data.snippets).toHaveLength(1);
+    expect(content.data.snippets[0]!.kind).toBe('text');
+    expect(content.images.size).toBe(0);
+  });
+
+  it('round-trips through zip with overwrite import', async () => {
     const tag = await createTag('read');
     const s = await addSnippet({ kind: 'text', text: 'quote', url: 'https://e.com', title: 'Essay', tags: [tag!.id] });
     await setComment(s.id, 'nice');
     await toggleStar(s.id);
+    await addSnippet({ kind: 'image', image: new Blob([new Uint8Array([9, 9])], { type: 'image/png' }), url: 'https://e.com/img', title: 'Pic' });
 
-    const file = await exportData();
+    const { blob } = await buildBackup();
+    const content = await zipToContent(blob);
     await db.snippets.clear();
     await db.tags.clear();
-    await importData(file, 'overwrite');
+    const result = await importBackup(content, 'overwrite');
+    expect(result.imported).toBe(2);
+    expect(result.failed).toBe(0);
 
     const items = await listSnippets();
-    expect(items).toHaveLength(1);
-    const first = items[0]!;
-    expect(first.text).toBe('quote');
-    expect(first.comment).toBe('nice');
-    expect(first.starred).toBe(true);
-    expect(first.tags).toEqual([tag!.id]);
+    expect(items).toHaveLength(2);
+    const text = items.find((x) => x.text === 'quote')!;
+    expect(text.comment).toBe('nice');
+    expect(text.starred).toBe(true);
+    expect(text.tags).toHaveLength(1);
+    const img = items.find((x) => x.kind === 'image')!;
+    expect(new Uint8Array(await img.image!.arrayBuffer())).toEqual(new Uint8Array([9, 9]));
     expect(await db.tags.toArray()).toHaveLength(1);
   });
 
-  it('export/import keeps image blobs', async () => {
-    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
-    await addSnippet({ kind: 'image', image: blob, url: 'u', title: 't' });
-    const file = await exportData();
-    await db.snippets.clear();
-    await importData(file, 'overwrite');
-    const items = await listSnippets();
-    expect(items).toHaveLength(1);
-    const first = items[0]!;
-    expect(first.image).toBeInstanceOf(Blob);
-    expect(new Uint8Array(await first.image!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
-  });
-
-  it('merge import appends new ids and dedupes tags by name', async () => {
+  it('merge import keeps source ids and dedupes tags by name', async () => {
     const tag = await createTag('shared');
     await addSnippet({ kind: 'text', text: 'existing', url: 'u', title: 't' });
 
-    const file = await exportData();
-    file.tags.push({ id: 'old-tag-id', name: 'shared', createdAt: 0 });
-    file.tags.push({ id: 'old-tag-id-2', name: 'new', createdAt: 0 });
-    file.snippets.push({
-      id: 'old-snippet-id',
-      kind: 'text',
-      text: 'imported',
-      url: 'v',
-      title: 't2',
-      tags: ['old-tag-id'],
-      starred: false,
-      timestamp: 1,
-    });
-
-    await importData(file, 'merge');
+    const content: BackupContent = {
+      data: {
+        app: 'NoteClip',
+        version: 2,
+        exportedAt: Date.now(),
+        snippets: [
+          { id: 'old-snippet-id', kind: 'text', text: 'imported', url: 'v', title: 't2', tags: ['old-tag-id'], starred: false, timestamp: 1 },
+        ],
+        tags: [
+          { id: 'old-tag-id', name: 'shared', createdAt: 0 },
+          { id: 'old-tag-id-2', name: 'new', createdAt: 0 },
+        ],
+      },
+      images: new Map(),
+    };
+    const result = await importBackup(content, 'merge');
+    expect(result.imported).toBe(1);
 
     const tags = await db.tags.toArray();
     const names = tags.map((t) => t.name).sort();
@@ -165,9 +198,93 @@ describe('import/export', () => {
     const items = await listSnippets();
     expect(items).toHaveLength(2);
     const imported = items.find((s) => s.text === 'imported')!;
-    expect(imported.id).not.toBe('old-snippet-id');
+    expect(imported.id).toBe('old-snippet-id');
     const linked = tags.find((t) => t.id === imported.tags[0])!;
     expect(linked.name).toBe('shared');
+  });
+
+  it('previewImport detects duplicates by content fingerprint', async () => {
+    await addSnippet({ kind: 'text', text: 'hello world', url: 'https://x.com', title: 't' });
+    const content: BackupContent = {
+      data: {
+        app: 'NoteClip',
+        version: 2,
+        exportedAt: 0,
+        snippets: [
+          { id: 'other-device-id', kind: 'text', text: 'hello world', url: 'https://x.com', title: 't', tags: [], starred: false, timestamp: 1 },
+          { id: 'new-one', kind: 'text', text: 'fresh', url: 'https://y.com', title: 't2', tags: [], starred: false, timestamp: 2 },
+        ],
+        tags: [],
+      },
+      images: new Map(),
+    };
+    const preview = await previewImport(content);
+    expect(preview.total).toBe(2);
+    expect(preview.duplicates).toBe(1);
+  });
+
+  it('importBackup skips duplicates only when requested', async () => {
+    await addSnippet({ kind: 'text', text: 'hello world', url: 'https://x.com', title: 't' });
+    const content: BackupContent = {
+      data: {
+        app: 'NoteClip',
+        version: 2,
+        exportedAt: 0,
+        snippets: [
+          { id: 'other-device-id', kind: 'text', text: 'hello world', url: 'https://x.com', title: 't', tags: [], starred: false, timestamp: 1 },
+          { id: 'new-one', kind: 'text', text: 'fresh', url: 'https://y.com', title: 't2', tags: [], starred: false, timestamp: 2 },
+        ],
+        tags: [],
+      },
+      images: new Map(),
+    };
+
+    const r1 = await importBackup(content, 'merge', { skipDuplicates: true });
+    expect(r1.skipped).toBe(1);
+    expect(r1.imported).toBe(1);
+    expect(await listSnippets()).toHaveLength(2);
+
+    // Re-importing without skipping: the clip skipped in r1 now imports
+    // (its id is not present), while 'new-one' is skipped by id.
+    const r2 = await importBackup(content, 'merge');
+    expect(r2.imported).toBe(1);
+    expect(r2.skipped).toBe(1);
+    expect(await listSnippets()).toHaveLength(3);
+  });
+
+  it('importBackup tolerates broken image entries', async () => {
+    const content: BackupContent = {
+      data: {
+        app: 'NoteClip',
+        version: 2,
+        exportedAt: 0,
+        snippets: [
+          { id: 'bad', kind: 'image', imageFile: 'images/missing.png', url: 'u', title: 'bad', tags: [], starred: false, timestamp: 1 },
+          { id: 'good', kind: 'text', text: 'ok', url: 'u2', title: 'g', tags: [], starred: false, timestamp: 2 },
+        ],
+        tags: [],
+      },
+      images: new Map(),
+    };
+    const result = await importBackup(content, 'overwrite');
+    expect(result).toEqual({ imported: 1, skipped: 0, failed: 1 });
+    const items = await listSnippets();
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe('ok');
+  });
+
+  it('readBackupZip rejects non-version-2 data', async () => {
+    const zipped = zipSync({
+      'data.json': strToU8(JSON.stringify({ app: 'NoteClip', version: 1, snippets: [], tags: [] })),
+    });
+    const file = new File([zipped as unknown as BlobPart], 'backup.zip');
+    await expect(readBackupZip(file)).rejects.toThrow();
+  });
+
+  it('dataUrlToBlob decodes base64 payloads', async () => {
+    const url = 'data:text/plain;base64,' + btoa('hello');
+    const back = dataUrlToBlob(url);
+    expect(await back.text()).toBe('hello');
   });
 });
 
@@ -190,24 +307,24 @@ describe('kind filter', () => {
 });
 
 describe('filtered export', () => {
-  it('exportData respects filters and prunes unreferenced tags', async () => {
+  it('buildBackup respects filters and prunes unreferenced tags', async () => {
     const tagA = await createTag('a');
     const tagB = await createTag('b');
     await addSnippet({ kind: 'text', text: 'alpha', url: 'u', title: 't', tags: [tagA!.id] });
     await addSnippet({ kind: 'image', image: new Blob([new Uint8Array([1])], { type: 'image/png' }), url: 'u', title: 'pic', tags: [tagB!.id] });
 
-    const full = await exportData();
-    expect(full.snippets).toHaveLength(2);
-    expect(full.tags).toHaveLength(2);
+    const full = await zipToContent((await buildBackup()).blob);
+    expect(full.data.snippets).toHaveLength(2);
+    expect(full.data.tags).toHaveLength(2);
 
-    const filtered = await exportData({ kind: 'text' });
-    expect(filtered.snippets).toHaveLength(1);
-    expect(filtered.snippets[0]!.text).toBe('alpha');
-    expect(filtered.tags.map((t) => t.name)).toEqual(['a']);
+    const filtered = await zipToContent((await buildBackup({ kind: 'text' })).blob);
+    expect(filtered.data.snippets).toHaveLength(1);
+    expect(filtered.data.snippets[0]!.text).toBe('alpha');
+    expect(filtered.data.tags.map((t) => t.name)).toEqual(['a']);
 
-    const byStar = await exportData({ starredOnly: true });
-    expect(byStar.snippets).toHaveLength(0);
-    expect(byStar.tags).toHaveLength(0);
+    const byStar = await zipToContent((await buildBackup({ starredOnly: true })).blob);
+    expect(byStar.data.snippets).toHaveLength(0);
+    expect(byStar.data.tags).toHaveLength(0);
   });
 
   it('buildMarkdownExport honors filters', async () => {

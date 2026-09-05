@@ -82,6 +82,19 @@
   "exportTitle": { "message": "选择导出格式" },
   "exportJson": { "message": "JSON 备份" },
   "exportMarkdown": { "message": "Markdown ZIP（含图片文件夹）" },
+  "exportHtmlBtn": { "message": "网页 HTML（单文件）" },
+  "copySource": { "message": "来源" },
+  "markdownTitle": { "message": "摘记本 NoteClip" },
+  "markdownMeta": { "message": "导出时间：{time}，共 {n} 条摘记" },
+  "markdownSource": { "message": "来源" },
+  "exportNoImages": { "message": "轻量备份（不含图片）" },
+  "exporting": { "message": "正在导出…" },
+  "importPreview": {
+    "message": "该文件包含 {n} 条摘记（图片 {m} 张），与现有摘记重复 {k} 条。"
+  },
+  "skipDuplicates": { "message": "跳过重复内容" },
+  "importProgress": { "message": "正在处理…（{p}/{t}）" },
+  "importDoneReport": { "message": "导入完成：成功 {n} 条，跳过 {d} 条，失败 {f} 条" },
   "sectionErrors": { "message": "错误报告" },
   "errorsHint": {
     "message": "摘记失败的操作会记录在此（仅保存在本地，最多 100 条），便于排查问题。"

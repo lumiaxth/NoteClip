@@ -257,6 +257,20 @@ body.nc-popup {
   cursor: pointer;
 }
 
+/* Long-running export/import feedback inside dialogs */
+.nc-progress {
+  font-size: 12.5px;
+  color: var(--primary);
+  margin: 4px 0 10px;
+}
+
+.nc-import-preview {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+
 /* The tagbar dissolves into the first toolbar row so its chips wrap
    individually with the other filter buttons instead of as one block. */
 .nc-tagbar {

@@ -6,14 +6,23 @@ import { loadSettings, saveSettings } from '@/settings/storage';
 import { BACKUP_INTERVALS, type Settings } from '@/settings/types';
 import { t, fullTime } from '@/utils/i18n';
 import { db, createTag, renameTag, deleteTag, listErrors, clearErrors } from '@/db';
-import { downloadExport, downloadMarkdownExport, readExportFile, importData } from '@/db/io';
+import {
+  buildBackup,
+  downloadExport,
+  downloadMarkdownExport,
+  previewImport,
+  readBackupZip,
+  importBackup,
+  type BackupContent,
+  type ProgressFn,
+} from '@/db/io';
 import { esc } from '@/utils/format';
 
 const ACCENT_PRESETS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
 
 let settings: Settings;
 let toastTimer: number | undefined;
-let pendingImport: Awaited<ReturnType<typeof readExportFile>> | null = null;
+let pendingContent: BackupContent | null = null;
 /** Latest error report rows, for the per-row copy button. */
 let latestErrors: Awaited<ReturnType<typeof listErrors>> = [];
 
@@ -306,12 +315,17 @@ export async function initOptions(root: HTMLElement): Promise<void> {
         <div class="row">
           <button class="nc-btn primary" id="btn-export">${esc(t('exportBtn'))}</button>
           <button class="nc-btn" id="btn-import">${esc(t('importBtn'))}</button>
-          <input type="file" id="import-file" accept=".json,application/json" hidden />
+          <input type="file" id="import-file" accept=".zip,application/zip" hidden />
         </div>
         <p class="muted" id="last-backup"></p>
         <p class="muted" id="storage-stats"></p>
         <dialog id="export-dialog" class="nc-dialog">
           <h3>${esc(t('exportTitle'))}</h3>
+          <label class="nc-export-filter">
+            <input type="checkbox" id="export-light" />
+            <span>${esc(t('exportNoImages'))}</span>
+          </label>
+          <p class="nc-progress" id="export-progress" hidden></p>
           <div class="nc-dialog-actions">
             <button data-format="json" class="nc-btn primary">${esc(t('exportJson'))}</button>
             <button data-format="markdown" class="nc-btn">${esc(t('exportMarkdown'))}</button>
@@ -320,6 +334,12 @@ export async function initOptions(root: HTMLElement): Promise<void> {
         </dialog>
         <dialog id="import-dialog" class="nc-dialog">
           <h3>${esc(t('importTitle'))}</h3>
+          <p class="nc-import-preview" id="import-preview"></p>
+          <label class="nc-export-filter" id="import-skip-row" hidden>
+            <input type="checkbox" id="import-skip" checked />
+            <span>${esc(t('skipDuplicates'))}</span>
+          </label>
+          <p class="nc-progress" id="import-progress" hidden></p>
           <div class="nc-dialog-actions">
             <button data-mode="overwrite" class="nc-btn primary">${esc(t('importOverwrite'))}</button>
             <button data-mode="merge" class="nc-btn">${esc(t('importMerge'))}</button>
@@ -372,24 +392,48 @@ export async function initOptions(root: HTMLElement): Promise<void> {
   const tagList = root.querySelector('#tag-list') as HTMLElement;
 
   exportBtn.addEventListener('click', () => {
+    (root.querySelector('#export-light') as HTMLInputElement).checked = false;
+    (root.querySelector('#export-progress') as HTMLElement).hidden = true;
     (root.querySelector('#export-dialog') as HTMLDialogElement).showModal();
   });
 
   (root.querySelector('#export-dialog') as HTMLDialogElement).addEventListener('click', (e) => {
+    const dialogEl = e.currentTarget as HTMLDialogElement;
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-format]');
     if (!btn) return;
     const format = btn.dataset.format as 'json' | 'markdown' | 'cancel';
-    (e.currentTarget as HTMLDialogElement).close();
-    if (format === 'cancel') return;
+    if (format === 'cancel') {
+      dialogEl.close();
+      return;
+    }
+    const noImages = (root.querySelector('#export-light') as HTMLInputElement).checked;
+    const progress = root.querySelector('#export-progress') as HTMLElement;
+    progress.textContent = t('exporting');
+    progress.hidden = false;
+    dialogEl
+      .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+      .forEach((b) => (b.disabled = true));
+    const onProgress: ProgressFn = (done, total) => {
+      progress.textContent = t('importProgress').replace('{p}', String(done)).replace('{t}', String(total));
+    };
     const download = format === 'json' ? downloadExport : downloadMarkdownExport;
-    download()
+    download({}, { noImages, onProgress })
+      .then(() => {
+        dialogEl.close();
+        return saveSettings({ lastBackupAt: Date.now() });
+      })
       .then(async () => {
-        await saveSettings({ lastBackupAt: Date.now() });
         settings = await loadSettings();
         renderLastBackup();
         toast(t('savedOk'));
       })
-      .catch(() => toast(t('exportError')));
+      .catch(() => toast(t('exportError')))
+      .finally(() => {
+        progress.hidden = true;
+        dialogEl
+          .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+          .forEach((b) => (b.disabled = false));
+      });
   });
 
   importBtn.addEventListener('click', () => importFile.click());
@@ -399,9 +443,17 @@ export async function initOptions(root: HTMLElement): Promise<void> {
     importFile.value = '';
     if (!file) return;
     try {
-      pendingImport = await readExportFile(file);
+      pendingContent = await readBackupZip(file);
+      const preview = await previewImport(pendingContent);
+      (root.querySelector('#import-preview') as HTMLElement).textContent = t('importPreview')
+        .replace('{n}', String(preview.total))
+        .replace('{m}', String(preview.imageCount))
+        .replace('{k}', String(preview.duplicates));
+      (root.querySelector('#import-skip-row') as HTMLElement).hidden = false;
+      (root.querySelector('#import-progress') as HTMLElement).hidden = true;
       importDialog.showModal();
     } catch {
+      pendingContent = null;
       toast(t('importError'));
     }
   });
@@ -410,13 +462,44 @@ export async function initOptions(root: HTMLElement): Promise<void> {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-mode]');
     if (!btn) return;
     const mode = btn.dataset.mode as 'overwrite' | 'merge' | 'cancel';
-    importDialog.close();
-    if (mode === 'cancel' || !pendingImport) return;
-    importData(pendingImport, mode)
-      .then(() => toast(t('importDone')))
+    if (mode === 'cancel' || !pendingContent) {
+      importDialog.close();
+      pendingContent = null;
+      return;
+    }
+    (root.querySelector('#import-skip-row') as HTMLElement).hidden = mode !== 'merge';
+    const skipDuplicates = mode === 'merge' && (root.querySelector('#import-skip') as HTMLInputElement).checked;
+    const progress = root.querySelector('#import-progress') as HTMLElement;
+    const total = pendingContent.data.snippets.length;
+    progress.textContent = t('importProgress').replace('{p}', '0').replace('{t}', String(total));
+    progress.hidden = false;
+    importDialog
+      .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+      .forEach((b) => (b.disabled = true));
+    const onProgress: ProgressFn = (done, totalNow) => {
+      progress.textContent = t('importProgress')
+        .replace('{p}', String(done))
+        .replace('{t}', String(totalNow));
+    };
+    const content = pendingContent;
+    importBackup(content, mode, { skipDuplicates, onProgress })
+      .then((result) => {
+        importDialog.close();
+        pendingContent = null;
+        toast(
+          t('importDoneReport')
+            .replace('{n}', String(result.imported))
+            .replace('{d}', String(result.skipped))
+            .replace('{f}', String(result.failed)),
+        );
+        void renderStorage();
+      })
       .catch(() => toast(t('importError')))
       .finally(() => {
-        pendingImport = null;
+        progress.hidden = true;
+        importDialog
+          .querySelectorAll<HTMLButtonElement>('.nc-dialog-actions .nc-btn')
+          .forEach((b) => (b.disabled = false));
       });
   });
 

@@ -45,7 +45,10 @@ export interface ExportSnippet {
   id: string;
   kind: SnippetKind;
   text?: string;
-  imageDataUrl?: string;
+  /** Relative path of the image inside the backup zip, e.g. images/<id>.png */
+  imageFile?: string;
+  /** Image byte size, used for duplicate detection without reading the file. */
+  imageBytes?: number;
   url: string;
   title: string;
   comment?: string;
@@ -56,7 +59,7 @@ export interface ExportSnippet {
 
 export interface ExportFile {
   app: 'NoteClip';
-  version: 1;
+  version: 2;
   exportedAt: number;
   snippets: ExportSnippet[];
   tags: Tag[];
