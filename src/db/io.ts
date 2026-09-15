@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { strFromU8, strToU8, unzip, zip, type Unzipped, type Zippable } from 'fflate';
 import type { ExportFile, ExportSnippet, Snippet } from '@/types';
-import { db, bumpVersion, listSnippets, type ListFilter } from '@/db';
+import { db, bumpVersion, listSnippets, snippetImages, type ListFilter } from '@/db';
 import { uuid } from '@/utils/id';
 import { buildMarkdownExport, markdownExportZip } from './markdown';
 
@@ -67,6 +67,12 @@ function fingerprintOfExport(s: ExportSnippet): string {
   return fingerprintOf({ kind: s.kind, url: s.url, text: s.text, imageSize: s.imageBytes });
 }
 
+/** Fingerprint for a stored snippet (multi-image total byte size). */
+function fingerprintOfSnippet(s: Snippet): string {
+  const size = snippetImages(s).reduce((n, b) => n + b.size, 0);
+  return fingerprintOf({ kind: s.kind, url: s.url, text: s.text, imageSize: size });
+}
+
 export function dataUrlToBlob(dataUrl: string): Blob {
   const comma = dataUrl.indexOf(',');
   const meta = comma === -1 ? dataUrl : dataUrl.slice(0, comma);
@@ -103,12 +109,20 @@ export async function buildBackup(
   const total = snippets.length;
   for (let i = 0; i < total; i++) {
     const s = snippets[i]!;
+    const blobs = snippetImages(s);
     let imageFile: string | undefined;
     let imageBytes: number | undefined;
-    if (s.image) {
-      imageFile = `images/${s.id}.${extForBlob(s.image)}`;
-      imageBytes = s.image.size;
-      images.set(imageFile, new Uint8Array(await readBytes(s.image)));
+    let imageFiles: string[] | undefined;
+    if (blobs.length === 1) {
+      imageFile = `images/${s.id}.${extForBlob(blobs[0]!)}`;
+      imageBytes = blobs[0]!.size;
+      images.set(imageFile, new Uint8Array(await readBytes(blobs[0]!)));
+    } else if (blobs.length > 1) {
+      imageFiles = blobs.map((b, k) => `images/${s.id}_${k}.${extForBlob(b)}`);
+      imageBytes = blobs.reduce((n, b) => n + b.size, 0);
+      for (let k = 0; k < imageFiles.length; k++) {
+        images.set(imageFiles[k]!, new Uint8Array(await readBytes(blobs[k]!)));
+      }
     }
     exportSnippets.push({
       id: s.id,
@@ -116,6 +130,7 @@ export async function buildBackup(
       text: s.text,
       imageFile,
       imageBytes,
+      imageFiles,
       url: s.url,
       title: s.title,
       comment: s.comment,
@@ -180,7 +195,7 @@ export async function readBackupZip(file: File): Promise<BackupContent> {
 /** Compare backup contents against the local library for the import preview. */
 export async function previewImport(content: BackupContent): Promise<ImportPreview> {
   const existing = await db.snippets.toArray();
-  const fingerprints = new Set(existing.map((s) => fingerprintOf(s)));
+  const fingerprints = new Set(existing.map((s) => fingerprintOfSnippet(s)));
   let duplicates = 0;
   let imageCount = 0;
   const seen = new Set<string>();
@@ -189,6 +204,7 @@ export async function previewImport(content: BackupContent): Promise<ImportPrevi
     if (fingerprints.has(fp) || seen.has(fp)) duplicates++;
     seen.add(fp);
     if (s.imageFile) imageCount++;
+    if (s.imageFiles) imageCount += s.imageFiles.length;
   }
   return { total: content.data.snippets.length, imageCount, duplicates };
 }
@@ -207,11 +223,21 @@ function toSnippet(
   idMap: Map<string, string>,
 ): Snippet {
   const tags = (s.tags ?? []).map((id) => idMap.get(id) ?? id);
+  // Multi-image clips carry imageFiles[]; legacy backups carry a single
+  // imageFile. Both forms land on the unified model (image/images).
+  const paths = [...(s.imageFiles ?? []), ...(s.imageFile ? [s.imageFile] : [])];
+  const blobs: Blob[] = [];
+  for (const p of paths) {
+    const b = blobFromImageFile(p, images);
+    if (b) blobs.push(b);
+  }
+  const single = blobs.length === 1 ? blobs[0] : undefined;
   return {
     id: s.id,
     kind: s.kind,
     text: s.text,
-    image: blobFromImageFile(s.imageFile, images),
+    image: single,
+    images: blobs.length > 1 ? blobs : undefined,
     url: s.url ?? '',
     title: s.title ?? '',
     comment: s.comment,
@@ -270,7 +296,7 @@ export async function importBackup(
     const all = await db.snippets.toArray();
     for (const s of all) {
       existingIds.add(s.id);
-      existingFps.add(fingerprintOf(s));
+      existingFps.add(fingerprintOfSnippet(s));
     }
   }
   const seenFps = new Set<string>();

@@ -8,6 +8,9 @@ import { flashBadge } from './menus';
 /** Serial ids for the temporary DNR session rules (one per in-flight save). */
 let dnrRuleSeq = 10000;
 
+/** frameId of the message sender currently being handled (for fallback). */
+let senderFrameId = 0;
+
 interface DnrApi {
   updateSessionRules: (details: {
     addRules?: {
@@ -80,10 +83,29 @@ export async function saveImageFromUrl(
   src: string,
   pageUrl: string,
   pageTitle: string,
-  opts: { tabId?: number; frameId?: number } = {},
+  opts: { tabId?: number; frameId?: number; sourceUrl?: string } = {},
 ): Promise<void> {
+  const blob = await fetchImageBlob(src, pageUrl, opts, 'save-image');
+  await addSnippet({
+    kind: 'image',
+    image: blob,
+    url: opts.sourceUrl || pageUrl,
+    title: pageTitle,
+  });
+}
+
+/**
+ * Fetch an image as a Blob with the full fallback chain: worker retry matrix
+ * (referrer variants + DNR Referer rewrite), then page-context fetch.
+ */
+async function fetchImageBlob(
+  src: string,
+  pageUrl: string,
+  opts: { tabId?: number; frameId?: number } = {},
+  source = 'save-image',
+): Promise<Blob> {
   if (!/^https?:/i.test(src)) {
-    return saveViaContentScript(src, pageUrl, pageTitle, opts);
+    return dataUrlToBlob(await fetchViaContentScript(src, opts));
   }
   let origin = '';
   try {
@@ -120,28 +142,24 @@ export async function saveImageFromUrl(
   let lastError = '';
   for (const attempt of attempts) {
     try {
-      const blob = await attempt.run();
-      await addSnippet({ kind: 'image', image: blob, url: pageUrl, title: pageTitle });
-      return;
+      return await attempt.run();
     } catch (e) {
       lastError = `${attempt.label}: ${String(e)}`;
     }
   }
   try {
-    return await saveViaContentScript(src, pageUrl, pageTitle, opts);
+    return dataUrlToBlob(await fetchViaContentScript(src, opts));
   } catch (e) {
-    await logError('save-image', `${lastError || 'fetch failed'}; fallback: ${String(e)}`, pageUrl || src);
-    throw new Error(lastError || 'image save failed');
+    await logError(source, `${lastError || 'fetch failed'}; fallback: ${String(e)}`, pageUrl || src);
+    throw new Error(lastError || 'image fetch failed');
   }
 }
 
-/** Route the fetch through the page context (supports blob:/data:/hotlink-protected URLs). */
-async function saveViaContentScript(
+/** Route the fetch through the page context (supports blob:/hotlink-protected URLs). */
+async function fetchViaContentScript(
   src: string,
-  pageUrl: string,
-  pageTitle: string,
   opts: { tabId?: number; frameId?: number },
-): Promise<void> {
+): Promise<string> {
   if (opts.tabId == null) throw new Error('no tab to fetch from');
   const resp = (await browser.tabs.sendMessage(
     opts.tabId,
@@ -149,11 +167,27 @@ async function saveViaContentScript(
     opts.frameId != null ? { frameId: opts.frameId } : undefined,
   )) as ClipFetchResponse | undefined;
   if (!resp?.ok || !('dataUrl' in resp) || !resp.dataUrl) throw new Error('page fetch failed');
-  const blob = dataUrlToBlob(resp.dataUrl);
-  await addSnippet({ kind: 'image', image: blob, url: pageUrl, title: pageTitle });
+  return resp.dataUrl;
 }
 
-async function handle(msg: BgMessage, senderTabUrl?: string, senderTabTitle?: string): Promise<BgResponse> {
+/** Encode a blob as a data URL without FileReader (works in MV3 workers). */
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return `data:${blob.type || 'image/png'};base64,${btoa(bin)}`;
+}
+
+interface SenderTabLike {
+  id?: number;
+  url?: string;
+  title?: string;
+}
+
+async function handle(msg: BgMessage, senderTab?: SenderTabLike): Promise<BgResponse> {
   switch (msg.type) {
     case 'saveText': {
       const snip = await addSnippet({ kind: 'text', text: msg.text, url: msg.url, title: msg.title });
@@ -161,16 +195,32 @@ async function handle(msg: BgMessage, senderTabUrl?: string, senderTabTitle?: st
       return { ok: true, id: snip.id };
     }
     case 'saveImage': {
-      // Prefer the top-level tab's title/URL: content scripts may run inside
-      // iframes where document.title is empty (e.g. embedded viewers).
-      const pageUrl = senderTabUrl || msg.pageUrl;
-      const pageTitle = senderTabTitle || msg.pageTitle;
+      // Content scripts extract the nearby post text (weibo body etc.) at
+      // right-click time; when present it beats the generic tab title.
+      const pageUrl = senderTab?.url || msg.pageUrl;
+      const pageTitle = msg.pageTitle || senderTab?.title || '';
+      // The snippet's source link prefers the post-specific anchor the
+      // content script extracted; the tab URL stays for Referer fallbacks.
+      const snippetUrl = msg.sourceUrl || pageUrl;
       try {
-        if (msg.dataUrl) {
+        if (msg.dataUrls?.length) {
+          // Multi-image clip: all pictures land in ONE snippet.
+          const blobs = msg.dataUrls.map(dataUrlToBlob);
+          await addSnippet({
+            kind: 'image',
+            images: blobs,
+            url: snippetUrl,
+            title: pageTitle,
+          });
+        } else if (msg.dataUrl) {
           const blob = dataUrlToBlob(msg.dataUrl);
-          await addSnippet({ kind: 'image', image: blob, url: pageUrl, title: pageTitle });
+          await addSnippet({ kind: 'image', image: blob, url: snippetUrl, title: pageTitle });
         } else if (msg.src) {
-          await saveImageFromUrl(msg.src, pageUrl, pageTitle);
+          await saveImageFromUrl(msg.src, pageUrl, pageTitle, {
+            tabId: senderTab?.id,
+            frameId: senderFrameId,
+            sourceUrl: msg.sourceUrl,
+          });
         } else {
           throw new Error('no image source');
         }
@@ -179,6 +229,23 @@ async function handle(msg: BgMessage, senderTabUrl?: string, senderTabTitle?: st
       } catch (e) {
         await logError('save-image', String(e), pageUrl);
         return { ok: false, error: 'image-fetch' };
+      }
+    }
+    case 'fetchImage': {
+      // Fetch an album original with the retry matrix and hand the bytes back
+      // so the content script can build a single multi-image snippet.
+      if (!msg.src || !/^https?:/i.test(msg.src)) return { ok: false, error: 'unsupported' };
+      try {
+        const blob = await fetchImageBlob(
+          msg.src,
+          senderTab?.url ?? msg.src,
+          { tabId: senderTab?.id, frameId: senderFrameId },
+          'fetch-image',
+        );
+        return { ok: true, dataUrl: await blobToDataUrl(blob) };
+      } catch {
+        // Errors are already logged inside fetchImageBlob.
+        return { ok: false, error: 'fetch failed' };
       }
     }
     case 'startCapture':
@@ -197,6 +264,7 @@ export function setupMessageHandler(): void {
     ) {
       return;
     }
-    return handle(message as BgMessage, sender.tab?.url, sender.tab?.title);
+    senderFrameId = sender.frameId ?? 0;
+    return handle(message as BgMessage, sender.tab);
   });
 }

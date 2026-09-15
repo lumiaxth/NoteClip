@@ -57,15 +57,43 @@ export function handleMenuClick(info: MenuClickInfo, tab?: TabLike): void {
       text: info.selectionText,
       url: pageUrl,
       title: pageTitle,
-    }).then(() => flashBadge('✓'));
-  } else if (info.menuItemId === MENU_CAPTURE) {
-    void startCapture();
-  } else if (info.menuItemId === MENU_SAVE_IMAGE && info.srcUrl) {
-    void saveImageFromUrl(info.srcUrl, pageUrl, pageTitle, {
-      tabId: tab?.id,
-      frameId: info.frameId,
     })
       .then(() => flashBadge('✓'))
       .catch(() => flashBadge('!'));
+  } else if (info.menuItemId === MENU_CAPTURE) {
+    void startCapture();
+  } else if (info.menuItemId === MENU_SAVE_IMAGE && info.srcUrl) {
+    void saveImageFromMenu(info.srcUrl, pageUrl, pageTitle, tab?.id, info.frameId)
+      .then(() => flashBadge('✓'))
+      .catch(() => flashBadge('!'));
   }
+}
+
+/**
+ * Context-menu image saves have no click coordinates, so the nearby post
+ * text and source anchor are fetched from the content script (it looks the
+ * <img> up by src), then the save proceeds with those overrides.
+ */
+export async function saveImageFromMenu(
+  srcUrl: string,
+  pageUrl: string,
+  fallbackTitle: string,
+  tabId?: number,
+  frameId?: number,
+): Promise<void> {
+  let title = fallbackTitle;
+  let sourceUrl: string | undefined;
+  if (tabId != null) {
+    try {
+      const resp = (await Promise.race([
+        browser.tabs.sendMessage(tabId, { type: 'clipPageTitle', src: srcUrl }, { frameId }),
+        new Promise<undefined>((resolve) => setTimeout(resolve, 500)),
+      ])) as { ok: boolean; title?: string; url?: string } | undefined;
+      if (resp && resp.title) title = resp.title;
+      if (resp && resp.url) sourceUrl = resp.url;
+    } catch {
+      // Content script missing → keep the tab title.
+    }
+  }
+  await saveImageFromUrl(srcUrl, pageUrl, title, { tabId, frameId, sourceUrl });
 }

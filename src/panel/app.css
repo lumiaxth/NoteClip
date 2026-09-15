@@ -397,6 +397,34 @@ body.nc-popup {
   cursor: zoom-in;
 }
 
+/* Multi-image clip: 3-column thumbnail grid with a "+N" badge */
+.nc-img.nc-img-multi {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.nc-img.nc-img-multi img {
+  aspect-ratio: 1;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+}
+
+.nc-img-more {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: rgba(15, 18, 30, 0.65);
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
 .nc-text {
   white-space: pre-wrap;
   word-break: break-word;

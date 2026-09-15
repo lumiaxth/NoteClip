@@ -12,6 +12,7 @@ import {
   renameTag,
   listSnippets,
   setSnippetTags,
+  snippetImages,
   logError,
   listErrors,
   clearErrors,
@@ -201,6 +202,80 @@ describe('zip backup export/import', () => {
     expect(imported.id).toBe('old-snippet-id');
     const linked = tags.find((t) => t.id === imported.tags[0])!;
     expect(linked.name).toBe('shared');
+  });
+
+  it('multi-image clips round-trip as imageFiles[]', async () => {
+    const blobs = [
+      new Blob([new Uint8Array([1, 1])], { type: 'image/png' }),
+      new Blob([new Uint8Array([2, 2])], { type: 'image/jpeg' }),
+      new Blob([new Uint8Array([3, 3])], { type: 'image/webp' }),
+    ];
+    await addSnippet({ kind: 'image', images: blobs, url: 'https://a.com/album', title: 'Album' });
+
+    const { blob } = await buildBackup();
+    const content = await zipToContent(blob);
+    const album = content.data.snippets[0]!;
+    expect(album.imageFiles).toHaveLength(3);
+    expect(album.imageFile).toBeUndefined();
+
+    await db.snippets.clear();
+    const result = await importBackup(content, 'overwrite');
+    expect(result.imported).toBe(1);
+    const restored = (await listSnippets())[0]!;
+    expect(restored.images).toHaveLength(3);
+    expect(restored.image).toBeUndefined();
+    expect(await snippetImages(restored)[0]!.text()).toBe('\u0001\u0001');
+    expect(await snippetImages(restored)[2]!.text()).toBe('\u0003\u0003');
+  });
+
+  it('legacy single-imageFile backups import as single-image clips', async () => {
+    const content: BackupContent = {
+      data: {
+        app: 'NoteClip',
+        version: 2,
+        exportedAt: 0,
+        snippets: [
+          {
+            id: 'legacy-img',
+            kind: 'image',
+            imageFile: 'images/legacy.png',
+            imageBytes: 2,
+            url: 'u',
+            title: 'legacy',
+            tags: [],
+            starred: false,
+            timestamp: 1,
+          },
+        ],
+        tags: [],
+      },
+      images: new Map([['images/legacy.png', new Uint8Array([7, 7])]]),
+    };
+    await importBackup(content, 'overwrite');
+    const restored = (await listSnippets())[0]!;
+    expect(restored.image).toBeInstanceOf(Blob);
+    expect(restored.images).toBeUndefined();
+    expect(new Uint8Array(await restored.image!.arrayBuffer())).toEqual(new Uint8Array([7, 7]));
+  });
+
+  it('multi-image markdown export writes one image per file', async () => {
+    const blobs = [
+      new Blob([new Uint8Array([1])], { type: 'image/png' }),
+      new Blob([new Uint8Array([2])], { type: 'image/png' }),
+    ];
+    await addSnippet({ kind: 'image', images: blobs, url: 'u', title: 'Album' });
+    const data = await buildMarkdownExport();
+    const paths = Object.keys(data.files).sort();
+    expect(paths).toHaveLength(2);
+    expect(data.md.match(/!\[Album\]\(images\//g)).toHaveLength(2);
+  });
+
+  it('addSnippet normalizes one-image arrays into the legacy image field', async () => {
+    const one = new Blob([new Uint8Array([9, 9])], { type: 'image/png' });
+    const snip = await addSnippet({ kind: 'image', images: [one], url: 'u', title: 'single' });
+    expect(snip.image).toBe(one);
+    expect(snip.images).toBeUndefined();
+    expect(snippetImages(snip)).toHaveLength(1);
   });
 
   it('previewImport detects duplicates by content fingerprint', async () => {

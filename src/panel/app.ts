@@ -10,6 +10,7 @@ import {
   createTag,
   deleteTag,
   db,
+  snippetImages,
 } from '@/db';
 import {
   buildBackup,
@@ -103,17 +104,42 @@ function objUrl(id: string, blob: Blob | undefined): string | undefined {
   return u;
 }
 
-function revokeUrl(id: string): void {
-  const u = objUrls.get(id);
-  if (u) {
-    URL.revokeObjectURL(u);
-    objUrls.delete(id);
+function revokeSnippetUrls(id: string): void {
+  for (const key of [...objUrls.keys()]) {
+    if (key === id || key.startsWith(`${id}#`)) {
+      const u = objUrls.get(key);
+      if (u) URL.revokeObjectURL(u);
+      objUrls.delete(key);
+    }
   }
 }
 
 function clearUrls(): void {
   objUrls.forEach((u) => URL.revokeObjectURL(u));
   objUrls.clear();
+}
+
+const EXT_BY_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/bmp': 'bmp',
+  'image/avif': 'avif',
+};
+
+function blobExt(blob: Blob): string {
+  return EXT_BY_MIME[blob.type.toLowerCase()] ?? 'png';
+}
+
+/** Sanitized base name for downloaded image files. */
+function downloadBase(title: string): string {
+  return (
+    title
+      .replace(/[\\/:*?"<>|\s]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 40) || 'noteclip'
+  );
 }
 
 function toast(msg: string): void {
@@ -130,14 +156,27 @@ function toast(msg: string): void {
 }
 
 function cardHtml(s: Snippet): string {
-  const url = objUrl(s.id, s.image);
-  const body =
-    s.kind === 'image'
-      ? `<div class="nc-img">${url ? `<img src="${url}" loading="lazy" alt="${t('imageKind')}" />` : ''}</div>${
-          s.text ? `<div class="nc-text nc-text-clip">${escHighlighted(s.text, state.query)}</div>` : ''
-        }`
-      : `<div class="nc-text nc-text-clamped" title="${esc(s.text ?? '')}">${escHighlighted(s.text ?? '', state.query)}</div>
+  const blobs = s.kind === 'image' ? snippetImages(s) : [];
+  const imgUrls = blobs.map((b, i) => objUrl(`${s.id}#${i}`, b)).filter((u): u is string => !!u);
+  let body: string;
+  if (s.kind === 'image' && imgUrls.length) {
+    body =
+      imgUrls.length === 1
+        ? `<div class="nc-img"><img src="${imgUrls[0]}" loading="lazy" alt="${t('imageKind')}" /></div>`
+        : // Multi-image clips render as a 3-column grid; >6 shows a "+N" badge.
+          `<div class="nc-img nc-img-multi">${imgUrls
+            .slice(0, 6)
+            .map((u) => `<img src="${u}" loading="lazy" alt="${t('imageKind')}" />`)
+            .join('')}${
+            imgUrls.length > 6 ? `<span class="nc-img-more">+${imgUrls.length - 6}</span>` : ''
+          }</div>`;
+  } else {
+    body = `<div class="nc-text nc-text-clamped" title="${esc(s.text ?? '')}">${escHighlighted(s.text ?? '', state.query)}</div>
         <button class="nc-expand-btn" data-action="expand" data-id="${s.id}" hidden>${t('expandMore')}</button>`;
+  }
+  if (s.kind === 'image' && s.text) {
+    body += `<div class="nc-text nc-text-clip">${escHighlighted(s.text, state.query)}</div>`;
+  }
 
   const tags = s.tags
     .map((tid) => {
@@ -160,7 +199,7 @@ function cardHtml(s: Snippet): string {
       <div class="nc-card-head">
         ${selectBox}
         <span class="nc-time" title="${esc(fullTime(s.timestamp))}">${esc(relTime(s.timestamp))}</span>
-        <span class="nc-badges">${s.kind === 'image' ? `<span class="nc-badge">${t('imageKind')}</span>` : ''}</span>
+        <span class="nc-badges">${s.kind === 'image' ? `<span class="nc-badge">${t('imageKind')}${imgUrls.length > 1 ? ` ×${imgUrls.length}` : ''}</span>` : ''}</span>
       </div>
       ${body}
       <div class="nc-meta">
@@ -183,7 +222,12 @@ function cardHtml(s: Snippet): string {
       </div>
       <div class="nc-card-actions">
         <button class="nc-action nc-star ${s.starred ? 'starred' : ''}" data-action="star" data-id="${s.id}" title="${s.starred ? t('unstarred') : t('starred')}">${s.starred ? '★' : '☆'}</button>
-        <button class="nc-action" data-action="copy" data-id="${s.id}" title="${t('copyAction')}">${t('copyAction')}</button>
+        ${s.kind === 'image' && imgUrls.length ? `<button class="nc-action" data-action="download" data-id="${s.id}" title="${t('downloadAction')}">${t('downloadAction')}</button>` : ''}
+        ${
+          s.kind === 'text'
+            ? `<button class="nc-action" data-action="copy" data-id="${s.id}" title="${t('copyAction')}">${t('copyAction')}</button>`
+            : ''
+        }
         <button class="nc-action nc-action-delete" data-action="delete" data-id="${s.id}" title="${t('delete')}">${t('delete')}</button>
       </div>
     </article>`;
@@ -374,11 +418,9 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
 
   async function copySnippet(s: Snippet): Promise<void> {
     try {
-      if (s.kind === 'text' || !s.image) {
-        if (s.text) await copyRichText(s);
-      } else {
-        await copyImageBlob(s.image);
-      }
+      // Image clips no longer copy from the card (browsers' native image
+      // menu on the viewer page covers per-image copy); text-only copy here.
+      if (s.kind === 'text' && s.text) await copyRichText(s);
       toast(t('copiedToast'));
     } catch {
       toast(t('copyFailToast'));
@@ -400,23 +442,6 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
         'text/html': `<div style="white-space:pre-wrap;font-family:system-ui,sans-serif">${body}</div>${source}`,
       }),
     ]);
-  }
-
-  async function copyImageBlob(blob: Blob): Promise<void> {
-    const type = blob.type.toLowerCase();
-    if (type === 'image/png' || type === 'image/jpeg' || type === 'image/webp') {
-      await navigator.clipboard.write([new ClipboardItem({ [type]: blob })]);
-      return;
-    }
-    // Unsupported formats are re-encoded as PNG via canvas.
-    const bmp = await createImageBitmap(blob);
-    const canvas = document.createElement('canvas');
-    canvas.width = bmp.width;
-    canvas.height = bmp.height;
-    canvas.getContext('2d')!.drawImage(bmp, 0, 0);
-    const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!png) throw new Error('canvas encode failed');
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
   }
 
   async function refreshTags(): Promise<void> {
@@ -533,7 +558,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   batchDeleteOk.addEventListener('click', async () => {
     const ids = [...batch.selected];
     batchDeleteDialog.close();
-    for (const id of ids) revokeUrl(id);
+    for (const id of ids) revokeSnippetUrls(id);
     await deleteSnippets(ids);
     batch.selected.clear();
     toast(t('batchDeletedToast').replace('{n}', String(ids.length)));
@@ -746,6 +771,26 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
     } else if (action === 'copy' && id) {
       const snip = await db.snippets.get(id);
       if (snip) void copySnippet(snip);
+    } else if (action === 'download' && id) {
+      const snip = await db.snippets.get(id);
+      if (!snip) return;
+      const blobs = snippetImages(snip);
+      if (!blobs.length) return;
+      const base = downloadBase(snip.title || domainOf(snip.url) || 'image');
+      try {
+        for (let k = 0; k < blobs.length; k++) {
+          const b = blobs[k]!;
+          const ext = blobExt(b);
+          await browser.downloads.download({
+            url: objUrl(`${id}#${k}`, b)!,
+            filename: blobs.length > 1 ? `${base}-${k + 1}.${ext}` : `${base}.${ext}`,
+            saveAs: false,
+          });
+        }
+        toast(t('savedOk'));
+      } catch {
+        toast(t('exportError'));
+      }
     } else if (action === 'delete' && id) {
       const card = el.closest('.nc-card') as HTMLElement;
       if (armedCard && armedCard !== card) disarmCardDelete(armedCard);
@@ -754,7 +799,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
     } else if (action === 'delete-confirm' && id) {
       const snip = await db.snippets.get(id);
       const label = snip ? snippetLabel(snip) : '';
-      revokeUrl(id);
+      revokeSnippetUrls(id);
       await deleteSnippet(id);
       toast(t('deletedToast').replace('{n}', label));
       await refresh();

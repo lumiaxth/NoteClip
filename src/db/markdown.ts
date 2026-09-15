@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import type { Snippet, Tag } from '@/types';
-import { db, listSnippets, type ListFilter } from '@/db';
+import { db, listSnippets, snippetImages, type ListFilter } from '@/db';
 import { uuid } from '@/utils/id';
 import type { ProgressFn } from './io';
 import { t, fullTime } from '@/utils/i18n';
@@ -79,13 +79,17 @@ export async function buildMarkdownExport(
       parts.push(`> ${s.comment.replace(/\r?\n/g, '\n> ')}`, '');
     }
 
-    if (s.kind === 'image' && s.image) {
+    if (s.kind === 'image') {
+      const blobs = snippetImages(s);
       const stamp = fileStamp(s.timestamp);
-      let name = `${stamp}-${s.id.slice(0, 6)}.${extFor(s.image)}`;
-      while (usedNames.has(name)) name = `${stamp}-${uuid().slice(0, 6)}.${extFor(s.image)}`;
-      usedNames.add(name);
-      imageFiles[`images/${name}`] = new Uint8Array(await s.image.arrayBuffer());
-      parts.push(`![${escCell(s.title || 'image')}](images/${name})`, '');
+      for (let k = 0; k < blobs.length; k++) {
+        const blob = blobs[k]!;
+        let name = `${stamp}-${s.id.slice(0, 6)}${blobs.length > 1 ? `-${k + 1}` : ''}.${extFor(blob)}`;
+        while (usedNames.has(name)) name = `${stamp}-${uuid().slice(0, 6)}.${extFor(blob)}`;
+        usedNames.add(name);
+        imageFiles[`images/${name}`] = new Uint8Array(await blob.arrayBuffer());
+        parts.push(`![${escCell(s.title || 'image')}](images/${name})`, '');
+      }
       if (s.text?.trim()) parts.push(s.text, '');
     } else if (s.text?.trim()) {
       parts.push(s.text, '');

@@ -1,6 +1,6 @@
 import type { Snippet } from '@/types';
 import { browser } from 'wxt/browser';
-import { db, listSnippets, type ListFilter } from '@/db';
+import { db, listSnippets, snippetImages, type ListFilter } from '@/db';
 import type { ProgressFn } from './io';
 import { t, fullTime } from '@/utils/i18n';
 import { esc, textFragmentUrl } from '@/utils/format';
@@ -74,9 +74,11 @@ export async function buildHtmlExport(
     const comment = s.comment?.trim() ? `<blockquote>${esc(s.comment)}</blockquote>` : '';
 
     let inner = '';
-    if (s.kind === 'image' && s.image) {
-      const dataUrl = await blobToDataUrl(s.image);
-      inner = `<img src="${dataUrl}" alt="${esc(s.title)}" />${s.text ? `<pre>${esc(s.text)}</pre>` : ''}`;
+    if (s.kind === 'image') {
+      const blobs = snippetImages(s);
+      const imgs: string[] = [];
+      for (const blob of blobs) imgs.push(`<img src="${await blobToDataUrl(blob)}" alt="${esc(s.title)}" />`);
+      inner = imgs.join('') + (s.text ? `<pre>${esc(s.text)}</pre>` : '');
     } else {
       inner = `<pre>${esc(s.text ?? '')}</pre>`;
     }

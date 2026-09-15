@@ -35,17 +35,30 @@ export interface NewSnippet {
   kind: 'text' | 'image';
   text?: string;
   image?: Blob;
+  images?: Blob[];
   url: string;
   title: string;
   tags?: string[];
 }
 
+/** Unified image list for a snippet: new multi-image field with legacy
+ * single-image fallback, so both old and new data render/export alike. */
+export function snippetImages(s: Snippet): Blob[] {
+  if (s.images && s.images.length) return s.images;
+  if (s.image) return [s.image];
+  return [];
+}
+
 export async function addSnippet(data: NewSnippet): Promise<Snippet> {
+  // Canonical normal form: exactly one picture → legacy `image` field,
+  // several pictures → `images[]`. Both old and new callers work alike.
+  const pics = data.images?.length ? data.images : data.image ? [data.image] : [];
   const snip: Snippet = {
     id: uuid(),
     kind: data.kind,
     text: data.text,
-    image: data.image,
+    image: pics.length === 1 ? pics[0] : undefined,
+    images: pics.length > 1 ? pics : undefined,
     url: data.url,
     title: data.title,
     comment: '',

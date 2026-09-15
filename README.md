@@ -10,12 +10,14 @@ A lightweight browser note-clipping extension. Capture text and screenshots from
 
 - **文字摘记**：选中文字后右键「添加到摘记本」，或选中后点击浮动「摘记」按钮。自动记录来源 URL、页面标题、保存时间；原样保留换行与缩进格式。
 - **截图摘记**：面板中点击「截图摘记」，在页面空白处右键「截图摘记」，或使用快捷键 `Alt+Shift+S`，框选当前标签页任意区域保存为图片摘记。保存后自动关闭裁剪页，支持手动关闭。
-- **图片摘记**：在网页图片上右键「保存图片到摘记本」。对于图片上有遮罩、或站点屏蔽原生右键菜单的页面（如小红书、抖音），右键时会自动出现浮动「摘记此图」按钮，点击即可保存。
+- **图片摘记**：在网页图片上右键「添加此图片到摘记本」，或右击后点击光标左侧的浮动「摘记图片」按钮（3 秒自动消失；右住的图片带视频帧时自动跳过）。保存后标题自动取**该帖子正文的前 60 字并有「正文 - 用户名」格式**（微博取正文节点文本、小红书取笔记标题、抖音取动态文案，纯图贴显示「图片」），来源链接指向**原帖**。支持手动关闭。
+- **图集摘录（微博 / 小红书 / 抖音）**：多图动态右击任意一张图后，点击浮动「摘记图片」弹出**选择窗**——屏幕居中缩略图网格、每张带独立复选框、默认全不选、标题行右侧三态全选框（全选 / 全不选 / 部分选中），「摘记所选 / 全部保存」把所选图片收进**一条多图摘记**。微博从其 API/SSR 数据捕获高清原图，小红书与抖音从笔记页 DOM 直采全部滑块图。
 - **图片兜底下载**：后台保存失败（如 `blob:` 图片、防盗链）时，自动转入页面上下文抓取并回传，大幅提高社交网站图片保存成功率；防盗链图床（如微博 `sinaimg.cn`）会通过临时 `declarativeNetRequest` 会话规则改写 Referer 后重试（规则仅对图片域名生效，抓取完立即删除）；失败会记录到错误报告。
 
 ### 管理
 
 - **列表视图**：面板（Chrome/Edge 侧边栏 / Firefox 弹窗）中倒序展示；较长摘记默认折叠，点击「展开」查看全部；显示来源标题（可点击回原文）、相对时间、来源域名；**单击图片摘记可在新标签页中查看大图**。
+- **多图卡片**：图集摘录以 3 列缩略图网格展示（超过 6 张显示 +N 角标、角标含图片数）；卡片带「下载」按钮逐张下载（文件名带标题与序号）。
 - **搜索与筛选**：按关键词实时搜索摘记内容、标题和批注；按「文字 / 图片」类型、星标、标签快速筛选。
 - **批注**：为任意摘记添加自由文本批注，自动保存。
 - **反馈提示**：摘记录入 / 删除时在列表上方弹出轻量 toast 提示，显示内容摘要（前 10 字）。
@@ -72,6 +74,18 @@ A lightweight browser note-clipping extension. Capture text and screenshots from
 | Firefox | 工具栏弹窗（Popup） | manifest 中排除 sidePanel |
 
 ## 更新日志 Changelog
+
+### 0.1.6
+
+- **新增**：图集摘录选择窗——多图动态（微博 / 小红书 / 抖音）右击图片弹出缩略图网格，每张带独立复选框、默认全不选、三态全选框；「摘记所选 / 全部保存」收进一条多图摘记
+- **新增**：多图数据模型与导出兼容——`Snippet.images[]` 统一模型，ZIP 备份 / Markdown / HTML 导出与旧版单图数据完全双向兼容
+- **新增**：侧边栏多图卡片——3 列缩略图网格（+N 角标、图片数角标）与逐张下载按钮
+- **新增**：查看页多图翻页——一次一张全屏查看，滚轮 / 点击图片左右两半 / `←→` 键 / 底部翻页条均可翻页；实况（LivePhoto）视频帧显示占位提示不再黑屏
+- **新增**：图片摘记标题升级为「帖子正文 - 作者名」（微博正文节点 / 小红书笔记标题 / 抖音动态文案，纯图贴显示「图片」），来源链接指向原帖（微博时间戳链接 / 小红书笔记页 / 抖音 `/note/<id>`）；60 字上限
+- **新增**：media-hook 内容脚本（MAIN world）——捕获微博/小红书/抖音的 API 与 SSR 数据中的图集原图列表
+- **改进**：浮动按钮统一显示在光标正左方、3 秒自动消失；右击任何普通图片都会出现摘图按钮（原生菜单不受影响），视频帧（.mp4/.mov）不出现
+- **修复**：图片复制统一转 PNG 后写入剪贴板（绕开浏览器对 JPEG/WebP 写入的支持差异）
+- **修复**：微博浮动按钮在靠近视口底部时被右键菜单遮挡；微博缩略图防盗链（缩略图带页面 Referer + CDN 镜像逐个重试）；右键菜单文案「添加此图片到摘记本」
 
 ### 0.1.5
 
@@ -169,18 +183,20 @@ npm run zip             # 生成 Chrome + Firefox 发布用 zip 包
 ```
 src/
 ├─ entrypoints/
-│  ├─ background.ts        # 后台服务：右键菜单、消息路由、快捷键、备份提醒、自动保存下载图片、stale capture 清理
-│  ├─ content/             # 内容脚本：浮动摘记按钮、浮动摘图按钮（页面上下文兜底抓图）、setting 实时跟随
+│  ├─ background.ts        # 后台服务：右键菜单、消息路由（saveText / saveImage / fetchImage）、快捷键、备份提醒、stale capture 清理
+│  ├─ content/             # 内容脚本：浮动摘记/摘图按钮（正左方定位 + 3 秒自动消失）、图集选择窗、
+│  │                       #   分站标题/作者/原帖提取（微博 wbtext+article、小红书 noteContainer、抖音 feed-active-video）、setting 实时跟随
+│  ├─ media-hook.content.ts # MAIN world 钩子：拦截 fetch/XHR + SSR，捕获微博/抖音/小红书图集原图列表
 │  ├─ sidepanel/           # Chrome/Edge 侧边栏入口
 │  ├─ popup/               # Firefox 弹窗入口
 │  ├─ options/             # 设置页（完整设置面板 + 错误报告）
-│  ├─ viewer/              # 图片查看页（列表单击图片在新标签页打开大图）
+│  ├─ viewer/              # 图片查看页（单张全屏 + 多图翻页：滚轮/点击两半/键盘/翻页条）
 │  └─ capture/             # 截图框选裁剪页（captureVisibleTab + Canvas 裁剪 + 倒计时自动关闭）
-├─ panel/                  # 面板共享 UI（列表、搜索、类型筛选、批注、标签、导入导出、展开/收起、toast 反馈）
+├─ panel/                  # 面板共享 UI（列表、搜索、类型筛选、批注、标签、多图网格卡片、导入导出、展开/收起、toast 反馈）
 ├─ settings/               # 设置模型（Settings 接口）、存取、主题应用（accent + color-mix）
 ├─ bg/                     # 后台逻辑模块
-│  ├─ menus.ts             # 右键菜单注册与点击处理
-│  ├─ messages.ts          # runtime.onMessage（saveText / saveImage / startCapture）、图片抓取重试矩阵 + DNR Referer 改写 + 页面兜底
+│  ├─ menus.ts             # 右键菜单注册与点击处理（clipPageTitle 就近正文/原帖采集）
+│  ├─ messages.ts          # runtime.onMessage（saveText / saveImage / fetchImage / startCapture）、图片抓取重试矩阵 + DNR Referer 改写 + 页面兜底
 │  ├─ commands.ts          # 快捷键（open-panel / start-capture）
 │  ├─ capture.ts           # 截图 captureVisibleTab → pendingCaptures 表
 │  ├─ autoSave.ts          # downloads.onCreated → 按设置自动保存下载的图片
@@ -196,5 +212,7 @@ public/
 
 tests/
 ├─ setup.ts                # fake-indexeddb + fake-browser + FileReader polyfill
-└─ db.test.ts              # 17 项数据层单元测试（含错误日志、类型筛选、Markdown 导出）
+├─ db.test.ts              # 数据层单元测试（CRUD、多图往返、错误日志、类型筛选、Markdown 导出）
+├─ aweme.test.ts           # 图集识别（resourceId / findAlbum）单元测试
+└─ utils.test.ts / htmlExport.test.ts
 ```

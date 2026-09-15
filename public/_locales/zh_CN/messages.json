@@ -6,7 +6,7 @@
   },
   "contextSaveSelection": { "message": "添加到摘记本" },
   "contextCapture": { "message": "截图摘记" },
-  "contextSaveImage": { "message": "添加图片到摘记本" },
+  "contextSaveImage": { "message": "添加此图片到摘记本" },
   "floatingCapture": { "message": "摘记" },
   "copyAction": { "message": "复制" },
   "copiedToast": { "message": "已复制到剪贴板" },
@@ -112,7 +112,14 @@
     "message": "开启后，通过浏览器下载图片时会自动保存一份图片到摘记本。"
   },
   "autoSaveTitle": { "message": "自动保存 · {d}" },
-  "floatingClipImage": { "message": "摘记此图" },
+  "floatingClipImage": { "message": "摘记图片" },
+  "albumPick": { "message": "选择要添加的图片" },
+  "saveMany": { "message": "摘记多图" },
+  "saveAll": { "message": "全部保存" },
+  "saveSelected": { "message": "摘记所选 ({n})" },
+  "savingProgress": { "message": "保存中 {p}/{t}" },
+  "albumCoverFallback": { "message": "未捕获图集数据，已摘记封面图。" },
+  "downloadAction": { "message": "下载" },
   "clippingNow": { "message": "正在保存…" },
   "viewerEmpty": { "message": "图片不存在或已被删除" },
   "viewerTitle": { "message": "摘记本 · 查看图片" },
@@ -127,6 +134,7 @@
   "imageFetchError": {
     "message": "图片保存失败（可能受防盗链保护）"
   },
+  "frameBroken": { "message": "此张为实况视频帧，无法预览" },
   "captureFailed": { "message": "截图失败，请确认当前为普通网页标签页" },
   "savedOk": { "message": "已保存" },
   "importError": { "message": "导入失败：无效的备份文件" },
