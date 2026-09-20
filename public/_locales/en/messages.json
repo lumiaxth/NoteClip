@@ -157,5 +157,12 @@
   "captureSaved": { "message": "Saved. You can close this tab." },
   "close": { "message": "Close" },
   "imageKind": { "message": "Image" },
-  "textKind": { "message": "Text" }
+  "textKind": { "message": "Text" },
+  "supportHint": { "message": "Enjoying NoteClip?" },
+  "sponsorAction": { "message": "Buy me a coffee" },
+  "rateAction": { "message": "Give it 5 stars" },
+  "supportSectionTitle": { "message": "Support the author" },
+  "supportSectionText": {
+    "message": "NoteClip is free, ad-free, and fully local. If it helps you, consider buying the author a coffee or leaving a five-star rating ❤️"
+  }
 }

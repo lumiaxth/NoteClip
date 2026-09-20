@@ -2,7 +2,7 @@
   "extensionName": { "message": "摘记本 - 网页摘录·截图·图片剪藏" },
   "panelTitle": { "message": "摘记本" },
   "extensionDescription": {
-    "message": "网页摘录、截图、图片剪藏，本地保存的轻量级摘记本。一站式检索、整理、批注。支持小红书、抖音、微博等主流网站。"
+    "message": "网页摘录、截图、图片剪藏，本地保存的轻量级摘记本。一站式检索、整理、批注。特别适配小红书、抖音、微博等主流网站。"
   },
   "contextSaveSelection": { "message": "添加到摘记本" },
   "contextCapture": { "message": "截图摘记" },
@@ -157,5 +157,12 @@
   "captureSaved": { "message": "已保存，可关闭此页" },
   "close": { "message": "关闭" },
   "imageKind": { "message": "图片" },
-  "textKind": { "message": "文字" }
+  "textKind": { "message": "文字" },
+  "supportHint": { "message": "喜欢摘记本？" },
+  "sponsorAction": { "message": "请作者喝杯咖啡" },
+  "rateAction": { "message": "五星好评" },
+  "supportSectionTitle": { "message": "支持作者" },
+  "supportSectionText": {
+    "message": "摘记本完全免费、无广告、数据全本地。如果它帮到了你，欢迎请作者喝杯咖啡或给个五星好评 ❤️"
+  }
 }

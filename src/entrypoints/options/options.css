@@ -245,6 +245,7 @@ textarea.site-list {
   font-size: 13px;
   cursor: pointer;
   min-width: 76px;
+  text-decoration: none;
   transition: border-color 0.12s, background 0.12s;
 }
 
@@ -317,3 +318,4 @@ textarea.site-list {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+

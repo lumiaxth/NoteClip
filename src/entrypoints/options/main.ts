@@ -17,6 +17,7 @@ import {
   type ProgressFn,
 } from '@/db/io';
 import { esc } from '@/utils/format';
+import { sponsorUrl, STORE_URL } from '@/utils/support';
 
 const ACCENT_PRESETS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
 
@@ -379,6 +380,15 @@ export async function initOptions(root: HTMLElement): Promise<void> {
           <button class="nc-btn" id="btn-clear-errors">${esc(t('errorsClear'))}</button>
         </div>
         <div id="error-list"></div>
+      </section>
+
+      <section class="support-section">
+        <h2>${esc(t('supportSectionTitle'))}</h2>
+        <p class="muted">${esc(t('supportSectionText'))}</p>
+        <div class="row">
+          <a class="nc-btn primary" id="btn-sponsor" href="${sponsorUrl()}" target="_blank" rel="noopener noreferrer">☕ ${esc(t('sponsorAction'))}</a>
+          <a class="nc-btn" id="btn-rate" href="${STORE_URL}" target="_blank" rel="noopener noreferrer">⭐ ${esc(t('rateAction'))}</a>
+        </div>
       </section>
     </div>
   `;

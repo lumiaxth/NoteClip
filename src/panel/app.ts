@@ -25,6 +25,7 @@ import {
 import { downloadHtmlExport } from '@/db/htmlExport';
 import type { Snippet, Tag } from '@/types';
 import { t, relTime, fullTime } from '@/utils/i18n';
+import { sponsorUrl, STORE_URL } from '@/utils/support';
 import { domainOf, esc, escHighlighted, textFragmentUrl } from '@/utils/format';
 
 interface ViewState {
@@ -267,6 +268,12 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
       <div class="nc-list" id="nc-list"></div>
       <div id="nc-sentinel" hidden></div>
       <div class="nc-empty" id="nc-empty" hidden></div>
+      <p class="nc-support" id="nc-support" hidden>
+        ❤️ <span>${t('supportHint')}</span>
+        <a href="${sponsorUrl()}" target="_blank" rel="noopener noreferrer">${t('sponsorAction')}</a>
+        <span class="nc-support-dot">·</span>
+        <a href="${STORE_URL}" target="_blank" rel="noopener noreferrer">${t('rateAction')}</a>
+      </p>
     </main>
     <dialog id="nc-export-dialog" class="nc-dialog">
       <h3 class="nc-dialog-title">${t('exportTitle')}</h3>
@@ -351,6 +358,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   const mainEl = root.querySelector('#nc-main') as HTMLElement;
   const sentinel = root.querySelector('#nc-sentinel') as HTMLElement;
   const empty = root.querySelector('#nc-empty') as HTMLElement;
+  const supportBar = root.querySelector('#nc-support') as HTMLElement;
   const tagbar = root.querySelector('#nc-tagbar') as HTMLElement;
   const datalist = root.querySelector('#nc-tag-datalist') as HTMLDataListElement;
   const dialog = root.querySelector('#nc-import-dialog') as HTMLDialogElement;
@@ -482,6 +490,9 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
     const hasFilter = !!(state.query.trim() || state.starredOnly || state.tagId || state.kind);
     empty.textContent = items.length ? '' : hasFilter ? t('emptyFiltered') : t('emptyAll');
     empty.hidden = items.length > 0;
+    // The support footer only shows below real cards, never under the
+    // empty-state guide.
+    supportBar.hidden = items.length === 0;
     filterStar.classList.toggle('active', state.starredOnly);
     filterText.classList.toggle('active', state.kind === 'text');
     filterImage.classList.toggle('active', state.kind === 'image');

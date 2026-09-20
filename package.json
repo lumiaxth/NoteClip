@@ -2,7 +2,7 @@
   "name": "noteclip",
   "description": "摘记本 NoteClip - a lightweight browser note-clipping extension",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "scripts": {
     "dev": "wxt",

@@ -615,6 +615,31 @@ body.nc-popup {
   opacity: 0.8;
 }
 
+/* Support footer after the last card: small, muted text links. */
+.nc-support {
+  margin: 4px 0 14px;
+  padding: 4px 2px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.nc-support a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.nc-support a:hover {
+  color: var(--primary);
+  text-decoration-color: currentColor;
+}
+
+.nc-support-dot {
+  margin: 0 6px;
+  opacity: 0.6;
+}
+
 .nc-dialog {
   border: 1px solid var(--border);
   border-radius: 12px;
