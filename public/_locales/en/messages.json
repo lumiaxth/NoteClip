@@ -159,6 +159,8 @@
   "imageKind": { "message": "Image" },
   "textKind": { "message": "Text" },
   "supportHint": { "message": "Enjoying NoteClip?" },
+  "deleteFrameConfirm": { "message": "Delete this picture?" },
+  "deleteShort": { "message": "Delete" },
   "sponsorAction": { "message": "Buy me a coffee" },
   "rateAction": { "message": "Give it 5 stars" },
   "supportSectionTitle": { "message": "Support the author" },

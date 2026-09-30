@@ -15,6 +15,9 @@ export interface Snippet {
   image?: Blob;
   /** one blob per picture for multi-image clips (Douyin/XHS/Weibo albums) */
   images?: Blob[];
+  /** Bumped on every image-list mutation so page-side object-URL caches
+   * (keyed by id + index) can drop stale thumbnails after deletions. */
+  imgRev?: number;
   /** source URL or file path */
   url: string;
   /** page/file title */

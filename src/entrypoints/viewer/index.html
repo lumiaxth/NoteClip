@@ -85,6 +85,17 @@
         opacity: 0.35;
         cursor: default;
       }
+      /* Text "delete" action: small like the counter, red on hover as the
+         destructive-action hint. */
+      #pager #pager-delete {
+        font-size: 12px;
+        padding: 2px 8px;
+        opacity: 0.8;
+      }
+      #pager #pager-delete:hover {
+        color: #ef4444;
+        opacity: 1;
+      }
       p {
         color: #9aa0a6;
         font: 14px/1.6 system-ui, sans-serif;
@@ -98,6 +109,7 @@
       <button id="pager-prev" title="‹">‹</button>
       <span id="pager-count"></span>
       <button id="pager-next" title="›">›</button>
+      <button id="pager-delete"></button>
     </div>
     <p id="empty" hidden></p>
   </body>

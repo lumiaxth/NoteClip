@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import { db, snippetImages } from '@/db';
+import { db, deleteSnippetImage, snippetImages } from '@/db';
 
 async function main(): Promise<void> {
   const id = new URLSearchParams(location.search).get('id');
@@ -9,6 +9,7 @@ async function main(): Promise<void> {
   const pagerPrev = document.getElementById('pager-prev') as HTMLButtonElement;
   const pagerNext = document.getElementById('pager-next') as HTMLButtonElement;
   const pagerCount = document.getElementById('pager-count') as HTMLElement;
+  const pagerDelete = document.getElementById('pager-delete') as HTMLButtonElement;
   document.title = browser.i18n.getMessage('viewerTitle') || document.title;
   if (!id) {
     empty.hidden = false;
@@ -100,6 +101,39 @@ async function main(): Promise<void> {
     if (e.key === 'ArrowRight') show(index + 1);
     if (e.key === 'Home') show(0);
     if (e.key === 'End') show(urls.length - 1);
+  });
+
+  // Text delete action: small "删除 / Delete" in the pager bar; red on
+  // hover marks the destructive action.
+  pagerDelete.textContent = browser.i18n.getMessage('deleteShort') || '删除';
+  let pagingDisabled = false;
+  const disablePaging = () => {
+    if (pagingDisabled) return;
+    pagingDisabled = true;
+    pager.hidden = true;
+  };
+  pagerDelete.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (pagingDisabled) return;
+    const msg = browser.i18n.getMessage('deleteFrameConfirm') || '确定删除这张图片吗？';
+    if (!window.confirm(msg)) return;
+    try {
+      const ok = await deleteSnippetImage(snip.id, index);
+      if (!ok) return;
+      urls.splice(index, 1);
+      frames[index]!.remove(); // current frame element
+      frames.splice(index, 1);
+      if (urls.length === 1) {
+        // Degrade to single-image viewer: kill nav, show the last one.
+        disablePaging();
+        show(0);
+        return;
+      }
+      // Keep browsing position within the shrunken list.
+      show(Math.min(index, urls.length - 1));
+    } catch (err) {
+      console.error('[NoteClip viewer] delete failed', err);
+    }
   });
   show(0);
 }

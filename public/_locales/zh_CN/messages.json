@@ -159,6 +159,8 @@
   "imageKind": { "message": "图片" },
   "textKind": { "message": "文字" },
   "supportHint": { "message": "喜欢摘记本？" },
+  "deleteFrameConfirm": { "message": "确定删除这张图片吗？" },
+  "deleteShort": { "message": "删除" },
   "sponsorAction": { "message": "请作者喝杯咖啡" },
   "rateAction": { "message": "五星好评" },
   "supportSectionTitle": { "message": "支持作者" },

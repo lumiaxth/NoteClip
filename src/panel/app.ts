@@ -158,7 +158,8 @@ function toast(msg: string): void {
 
 function cardHtml(s: Snippet): string {
   const blobs = s.kind === 'image' ? snippetImages(s) : [];
-  const imgUrls = blobs.map((b, i) => objUrl(`${s.id}#${i}`, b)).filter((u): u is string => !!u);
+  const rev = s.imgRev ?? 0;
+  const imgUrls = blobs.map((b, i) => objUrl(`${s.id}#${i}#${rev}`, b)).filter((u): u is string => !!u);
   let body: string;
   if (s.kind === 'image' && imgUrls.length) {
     body =
@@ -524,9 +525,12 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
   );
   loadMore.observe(sentinel);
 
+  // Search debounce: fast typing merges into one full refresh after 150ms.
+  let searchTimer = 0;
   search.addEventListener('input', () => {
     state.query = search.value;
-    void refresh();
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => void refresh(), 150);
   });
 
   filterStar.addEventListener('click', () => {
@@ -793,7 +797,7 @@ export async function mountPanel(root: HTMLElement): Promise<void> {
           const b = blobs[k]!;
           const ext = blobExt(b);
           await browser.downloads.download({
-            url: objUrl(`${id}#${k}`, b)!,
+            url: objUrl(`${id}#${k}#${snip.imgRev ?? 0}`, b)!,
             filename: blobs.length > 1 ? `${base}-${k + 1}.${ext}` : `${base}.${ext}`,
             saveAs: false,
           });

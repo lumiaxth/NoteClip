@@ -76,6 +76,29 @@ export async function deleteSnippet(id: string): Promise<void> {
   await bumpVersion();
 }
 
+/** Remove one picture from a snippet's image list (viewer trash button),
+ * writing back in the same canonical form addSnippet produces: a single
+ * remaining picture lands in the legacy `image` field. Returns false when
+ * the index is out of range or the deletion would leave nothing behind. */
+export async function deleteSnippetImage(id: string, index: number): Promise<boolean> {
+  const s = await db.snippets.get(id);
+  if (!s) return false;
+  const pics = snippetImages(s);
+  if (index < 0 || index >= pics.length) return false;
+  const remaining = pics.filter((_, i) => i !== index);
+  if (!remaining.length) return false;
+  const update: Partial<Snippet> = {
+    image: undefined,
+    images: undefined,
+    imgRev: (s.imgRev ?? 0) + 1,
+  };
+  if (remaining.length === 1) update.image = remaining[0];
+  else update.images = remaining;
+  await db.snippets.update(id, update);
+  await bumpVersion();
+  return true;
+}
+
 /** Bulk delete (batch mode); ids not found are ignored. */
 export async function deleteSnippets(ids: string[]): Promise<void> {
   if (!ids.length) return;

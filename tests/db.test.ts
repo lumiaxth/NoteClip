@@ -3,6 +3,7 @@ import {
   db,
   addSnippet,
   deleteSnippet,
+  deleteSnippetImage,
   deleteSnippets,
   addTagToSnippets,
   setComment,
@@ -276,6 +277,40 @@ describe('zip backup export/import', () => {
     expect(snip.image).toBe(one);
     expect(snip.images).toBeUndefined();
     expect(snippetImages(snip)).toHaveLength(1);
+  });
+
+  it('deleteSnippetImage removes one picture and keeps the order', async () => {
+    const blobs = [
+      new Blob([new Uint8Array([1])], { type: 'image/png' }),
+      new Blob([new Uint8Array([2])], { type: 'image/png' }),
+      new Blob([new Uint8Array([3])], { type: 'image/png' }),
+    ];
+    const snip = await addSnippet({ kind: 'image', images: blobs, url: 'u', title: 'album' });
+
+    expect(await deleteSnippetImage(snip.id, 1)).toBe(true);
+    const updated = (await db.snippets.get(snip.id))!;
+    expect(snippetImages(updated)).toHaveLength(2);
+    expect(new Uint8Array(await snippetImages(updated)[0]!.arrayBuffer())).toEqual(
+      new Uint8Array([1]),
+    );
+    expect(new Uint8Array(await snippetImages(updated)[1]!.arrayBuffer())).toEqual(
+      new Uint8Array([3]),
+    );
+
+    expect(await deleteSnippetImage(snip.id, 9)).toBe(false);
+  });
+
+  it('deleteSnippetImage degrades to a single-image snippet at one picture left', async () => {
+    const blobs = [
+      new Blob([new Uint8Array([1])], { type: 'image/png' }),
+      new Blob([new Uint8Array([2])], { type: 'image/png' }),
+    ];
+    const snip = await addSnippet({ kind: 'image', images: blobs, url: 'u', title: 'two' });
+
+    expect(await deleteSnippetImage(snip.id, 0)).toBe(true);
+    const updated = (await db.snippets.get(snip.id))!;
+    expect(updated.images).toBeUndefined();
+    expect(new Uint8Array(await updated.image!.arrayBuffer())).toEqual(new Uint8Array([2]));
   });
 
   it('previewImport detects duplicates by content fingerprint', async () => {
